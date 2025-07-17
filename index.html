@@ -18,16 +18,19 @@
       background-color: #f8f9fa;
     }
     .sidebar-right {
-      position: sticky;
+      position: fixed;      /* Change from sticky to fixed */
       top: 80px;
+      right: 0;             /* Add this line */
       padding-left: 1rem;
       height: calc(100vh - 80px);
       overflow-y: auto;
-      width: 260px; /* Add this line */
+      width: 260px;
+      background-color: #f8f9fa; /* Optional: match left sidebar */
+      z-index: 1030;        /* Optional: keep above content */
     }
     .main-content {
-      margin-left: 260px;
-      margin-right: 300px;
+      margin-left: 200px;   /* Match sidebar-left width */
+      margin-right: 260px;  /* Match sidebar-right width */
       padding-top: 2rem;
     }
     pre code {
@@ -120,7 +123,10 @@ print("Initialized Earth Engine")
         setTimeout(() => { btn.innerText = 'Copy'; }, 2000);
       });
     }
-  </script>
-</body>
-</html>
+  </script>  </script>
+</body></body>
+
+
+
+</html></html>
 
