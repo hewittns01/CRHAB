@@ -101,7 +101,37 @@
     <h3 id="section2">1. Script to Export Images from Google Earth Engine to Google Drive</h3>
     <p>Due to the large input of the dataset, the code could not be run through geemap in Jupyter Lab. Therefore, Google Earth Engine was used for gathering Sentinel-2 images.</p>
     <p></p>
-    <p>Link: <a href="https://my.sfwmd.gov/dbhydroplsql/show_dbkey_info.main_menu">DBHYDRO Browser Menu</a></p>
+    <p>Recommendations by Gemini for NDCI and FAI Bloom Thresholds: 
+Of course. Redefining your script for a binary "bloom" or "no bloom" classification is a great way to simplify the output for clear, actionable insights. Here’s a breakdown of appropriate NDCI and FAI thresholds based on scientific literature, including justification related to the Florida Department of Environmental Protection (FDEP) 40 micrograms per liter (µg/L) chlorophyll-a benchmark, and how to update your Google Earth Engine script.
+
+Recommended Thresholds for Algal Bloom Detection
+For the Caloosahatchee River estuary, which is a complex and optically variable water body, it's best to rely on thresholds established in similar environments. While locally-calibrated thresholds are always ideal, the following recommendations are based on strong evidence from published remote sensing studies.
+
+Normalized Difference Chlorophyll Index (NDCI)
+The NDCI is excellent for quantifying chlorophyll-a concentration, making it well-suited to align with the FDEP's 40 µg/L guidance.
+
+Recommended Threshold: 0.20
+
+Justification:
+A key study by Mishra and Mishra (2012), which originally proposed the NDCI for estuarine and coastal waters, provides a direct correlation between NDCI values and chlorophyll-a concentrations. Their findings include the following ranges:
+
+**NDCI 0.2 to 0.4: Corresponds to 33-50 µg/L of chlorophyll-a.**
+
+Given that the FDEP considers 40 µg/L of chlorophyll-a as the indicator for an algal bloom, setting the NDCI threshold at 0.20 is a scientifically-backed starting point. This value represents the lower bound of the chlorophyll-a range that encompasses the FDEP's bloom concentration, making it a robust choice for identifying significant algal biomass. An NDCI value greater than or equal to 0.2 indicates a high probability that chlorophyll-a concentrations are at or approaching bloom levels.
+
+<br></br>
+
+Floating Algae Index (FAI)
+The FAI is designed specifically to detect floating mats of algae on the water's surface. It is less of a quantitative measure of chlorophyll-a throughout the water column and more of a qualitative indicator of surface-scumming blooms, which are common in the Caloosahatchee. Because it's a different type of measurement, its threshold isn't directly tied to a specific chlorophyll-a concentration.
+
+Recommended Threshold: 0.02
+
+Justification:
+The original FAI paper by Hu (2009) established the index but did not propose a universal threshold. Subsequent research has shown that even slightly positive FAI values can indicate the presence of floating matter. More recent studies have used various thresholds for bloom detection in different water bodies.
+
+For your application, a conservative but effective threshold is recommended. The value of 0.02 is a commonly used starting point in the scientific community for distinguishing low-to-moderate density floating algae from the surrounding water.** Your previous script used a threshold of 0.02 for a "bloom" state, which aligns with this conservative approach. Since FAI is excellent at highlighting significant surface features, this threshold will effectively capture the dense surface blooms of concern in the estuary without being overly sensitive to submerged vegetation or other optical complexities.
+<br></br><br></br>
+New Script on Google Earth Engine under HAB directory, titled "GifAttempt_V2"</a></p>
     <br>
     <p>Mean daily discharge data was downloaded for stations S77_TOT and S77_S from January 1, 2019 to December 31, 2024.</p>
 
