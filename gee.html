@@ -15,15 +15,15 @@
       bottom: 0;
       width: 200px;
       padding-top: 1rem;
-      background-color: #ff0ef3;
-      color: #ff0000; /* Left sidebar text color */
+      background-color: #01794c;
+      color: #004682; /* Left sidebar text color */
     }
     .sidebar-left .nav-link {
-      color: #169e3e !important; /* Gold links for left sidebar */
+      color: #004682 !important; /* Gold links for left sidebar */
     }
     .sidebar-left .nav-link.active {
-      color: #00eeff !important;
-      background-color: #1d0083 !important;
+      color: #ffffff !important;
+      background-color: #ccab00 !important;
     }
 
     .sidebar-right {
@@ -34,16 +34,16 @@
       height: calc(100vh - 80px);
       overflow-y: auto;
       width: 260px;
-      background-color: #05661a;
+      background-color: #004682;
       z-index: 1030;
       color: #5a2b05; /* Right sidebar text color */
     }
     .sidebar-right .nav-link {
-      color: #1b5e64 !important; /* Cyan links for right sidebar */
+      color: #004682 !important; /* Cyan links for right sidebar */
     }
     .sidebar-right .nav-link.active {
       color: #fff !important;
-      background-color: #0b5299 !important;
+      background-color: #01794c !important;
     }
     .main-content {
       margin-left: 220px;   /* Match sidebar-left width */
@@ -101,6 +101,7 @@
     <h3 id="section2">1. Script to Export Images from Google Earth Engine to Google Drive</h3>
     <p>Due to the large input of the dataset, the code could not be run through geemap in Jupyter Lab. Therefore, Google Earth Engine was used for gathering Sentinel-2 images.</p>
     <p></p>
+    
     <p>Recommendations by Gemini for NDCI and FAI Bloom Thresholds: 
 Of course. Redefining your script for a binary "bloom" or "no bloom" classification is a great way to simplify the output for clear, actionable insights. Here’s a breakdown of appropriate NDCI and FAI thresholds based on scientific literature, including justification related to the Florida Department of Environmental Protection (FDEP) 40 micrograms per liter (µg/L) chlorophyll-a benchmark, and how to update your Google Earth Engine script.
 
