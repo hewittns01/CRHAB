@@ -69,8 +69,8 @@
   <div class="sidebar-left">
     <ul class="nav flex-column nav-pills px-2">
       <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
-      <li class="nav-item"><a class="nav-link" href="data.html">Data Collection</a></li>
-      <li class="nav-item"><a class="nav-link" href="gee.html">Google Earth Engine</a></li>
+      <li class="nav-item"><a class="nav-link" href="data.html">Data Collection - DBHYDRO</a></li>
+      <li class="nav-item"><a class="nav-link" href="gee.html">Data Collection - Google Earth Engine</a></li>
       <li class="nav-item"><a class="nav-link" href="analysis.html">Analysis</a></li>
       <li class="nav-item"><a class="nav-link" href="results.html">Results</a></li>
     </ul>
@@ -78,20 +78,15 @@
 
   <!-- Main Content -->
   <main class="main-content">
-    <h1 id="section1">Algal Blooms and Discharge in the Caloosahatchee River</h1>
-    <p>This project explores the use of remote sensing coupled with <i>in situ</i> data from DBHYDRO to train models to forecast likelihoods of algal blooms.</p>
+    <h1 id="section1">Data Collection</h1>
+    
+    <h2 id="section2">1. Download Discharge Data</h2>
+    <p>Discharge data for Caloosahatchee River stations available at the South Florida Water Management District's DBHYDRO website:</p>
+    <a href="https://my.sfwmd.gov/dbhydroplsql/show_dbkey_info.main_menu">DBHYDRO Browser Menu</a>
+    <br>
+    <p>Mean daily discharge data was downloaded for stations S77_TOT and S77_S from January 1, 2019 to December 31, 2024.</p>
 
-    <h2 id="section2">Hypothesis</h2>
-    <p>Gate operations at Lake Okeechobee-specifically the timing, volume, and duration of water discharges into the Caloosahatchee River-are hypothesized to directly influence the intensity, duration, and toxicity of harmful algal blooms (HABs) in the estuary by modulating nutrient loads and altering hydrological conditions that favor cyanobacterial growth. 
-      <br>
-      <br>
-      Discharges from the lake often carry elevated concentrations of nitrogen and phosphorus, largely originating from upstream agricultural and urban runoff, into the river system, systematically intensifying blooms such as Microcystis and red tide events. The timing of these releases, especially during wet seasons or following heavy rainfall, can amplify nutrient delivery and create low-salinity, stable water conditions that further promote bloom formation and persistence. 
-      <br>
-      <br>
-      Human activities in the watershed contribute to this nutrient loading, and the management of gate operations thus serves as a critical control point for downstream water quality. By strategically adjusting the timing and volume of discharges, it may be possible to reduce HAB severity in the Caloosahatchee by limiting nutrient availability and disrupting favorable bloom conditions, highlighting the importance of integrated water management for HAB mitigation.
-</p>
-
-    <h2 id="section3">Abstract</h2>
+    <h2 id="section3">Section 3</h2>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
 import ee
