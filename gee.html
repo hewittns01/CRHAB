@@ -8,6 +8,7 @@
   <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
   <style>
     body {
       position: relative;
@@ -104,7 +105,129 @@
     <p>Sentinel-2 is a satellite with datasets at the 10m2 spatial resolution for multispectral imagery.</p>
     <h3 id="section2">1. Script to Export Images from Google Earth Engine to Google Drive</h3>
     <p>Due to the large input of the dataset, the code could not be run through geemap in Jupyter Lab. Therefore, Google Earth Engine was used for gathering Sentinel-2 images.</p>
-    <p></p>
+
+    <br></br>
+
+<!-- Code Block for Copy/Paste Javascript from Google Earth Engine -->
+<button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-javascript">
+// =================================================================================
+//  Robust Batch Export Script (2018-2024) with Task Creation
+// =================================================================================
+
+// --- Parameters ---
+var START_YEAR = 2018;
+var END_YEAR = 2024;
+var USER_ASSET_FOLDER = 'users/hewittns01/algae_exports_V2'; // Your output folder
+var aoi = ee.FeatureCollection('projects/ee-hewittns01/assets/WholeLakeO_to_Caloo');
+
+// --- Redefined Binary Thresholds ---
+var ndciThreshold = 0.20;
+var faiThreshold = 0.02;
+
+// --- Functions ---
+var maskS2Clouds = function(image) {
+  var qa = image.select('QA60');
+  var cloudBitMask = 1 << 10;
+  var cirrusBitMask = 1 << 11;
+  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
+      .and(qa.bitwiseAnd(cirrusBitMask).eq(0));
+  return image.updateMask(mask);
+};
+
+var maskWater = function(image) {
+  var ndwi = image.normalizedDifference(['B3', 'B8']).rename('NDWI');
+  var waterMask = ndwi.gt(0.0);
+  return image.updateMask(waterMask);
+};
+
+// --- Main Processing Loop ---
+print('Starting batch processing for years: ' + START_YEAR + ' to ' + END_YEAR);
+print('---');
+
+// Loop through each year
+for (var year = START_YEAR; year <= END_YEAR; year++) {
+  
+  // Loop through each month
+  for (var month = 1; month <= 12; month++) {
+    
+    // Define the two periods for the month
+    var dateRanges = [
+      {
+        label: year + '_' + ('0' + month).slice(-2) + '_a_1-15',
+        start: ee.Date.fromYMD(year, month, 1),
+        end: ee.Date.fromYMD(year, month, 15)
+      },
+      {
+        label: year + '_' + ('0' + month).slice(-2) + '_b_16-end',
+        start: ee.Date.fromYMD(year, month, 16),
+        end: ee.Date.fromYMD(year, month, 1).advance(1, 'month').advance(-1, 'day')
+      }
+    ];
+
+    // Process each half-month period
+    dateRanges.forEach(function(period) {
+      
+      var s2Collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+          .filterDate(period.start, period.end)
+          .filterBounds(aoi);
+
+      // Bring the image count to the client to safely create tasks
+      var collectionSize = s2Collection.size().getInfo();
+      
+      // Check if there are any images in the collection
+      if (collectionSize > 0) {
+        print('FOUND ' + collectionSize + ' images for ' + period.label + '. Creating tasks...');
+        
+        var indicesToRun = ['NDCI', 'FAI'];
+        indicesToRun.forEach(function(indexName) {
+          
+          var composite = s2Collection.map(maskS2Clouds).median().divide(10000);
+          var finalComposite = maskWater(composite).clip(aoi);
+          
+          var index;
+          var threshold;
+          if (indexName === 'NDCI') {
+            index = finalComposite.normalizedDifference(['B5', 'B4']).rename('NDCI');
+            threshold = ndciThreshold;
+          } else { // FAI
+            var faiBaseline = finalComposite.select('B4').add(finalComposite.select('B11').subtract(finalComposite.select('B4')).multiply((842 - 665) / (1610 - 665)));
+            index = finalComposite.select('B8').subtract(faiBaseline).rename('FAI');
+            threshold = faiThreshold;
+          }
+          
+          var classifiedImage = ee.Image(1).where(index.gte(threshold), 2);
+          var singleBandMask = finalComposite.select('B2').mask();
+          var imageToExport = classifiedImage.updateMask(singleBandMask).toByte();
+          
+          var outputAssetId = USER_ASSET_FOLDER + '/' + indexName + '_Binary_Classified_' + period.label;
+          
+          // This will create a task in the "Tasks" tab for you to run
+          Export.image.toAsset({
+            image: imageToExport,
+            description: indexName + '_to_Asset_Binary_' + period.label,
+            assetId: outputAssetId,
+            region: aoi.geometry(),
+            scale: 10,
+            maxPixels: 1e13
+          });
+        });
+      } else {
+        // If no images are found, print a skip message.
+        print('Skipping ' + period.label + ': No images found.');
+      }
+    }); // end period loop
+    
+  } // end month loop
+  
+  print('--- Finished processing year ' + year + ' ---');
+  
+} // end year loop
+
+Map.centerObject(aoi, 9);
+Map.addLayer(aoi, {color: 'red'}, 'Area of Interest');
+});
+</code></pre>
     
     <p>Recommendations by Gemini for NDCI and FAI Bloom Thresholds: 
 Of course. Redefining your script for a binary "bloom" or "no bloom" classification is a great way to simplify the output for clear, actionable insights. Here’s a breakdown of appropriate NDCI and FAI thresholds based on scientific literature, including justification related to the Florida Department of Environmental Protection (FDEP) 40 micrograms per liter (µg/L) chlorophyll-a benchmark, and how to update your Google Earth Engine script.
@@ -135,18 +258,11 @@ Justification:
 The original FAI paper by Hu (2009) established the index but did not propose a universal threshold. Subsequent research has shown that even slightly positive FAI values can indicate the presence of floating matter. More recent studies have used various thresholds for bloom detection in different water bodies.
 
 For your application, a conservative but effective threshold is recommended. The value of 0.02 is a commonly used starting point in the scientific community for distinguishing low-to-moderate density floating algae from the surrounding water.** Your previous script used a threshold of 0.02 for a "bloom" state, which aligns with this conservative approach. Since FAI is excellent at highlighting significant surface features, this threshold will effectively capture the dense surface blooms of concern in the estuary without being overly sensitive to submerged vegetation or other optical complexities.
-<br></br><br></br>
+<br></br>
 New Script on Google Earth Engine under HAB directory, titled "GifAttempt_V2"</a></p>
     <br>
-    <h5>Creates NDCI Data which will be used for figures and frames for GIF</h5>
-    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-    <pre><code class="language-python">
-import ee
-ee.Initialize()
-print("Initialized Earth Engine")
-    </code></pre>
 
-    <h3 id="section3">Section 3</h3>
+    <h5 id="section3">Creates NDCI Data which will be used for figures and frames for GIF</h5>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
 import ee
