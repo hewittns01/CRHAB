@@ -108,10 +108,22 @@
     <h3 id="section3">Section 3</h3>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
-import ee
-ee.Initialize()
-print("Initialized Earth Engine")
+import pandas as pd
+
+# === Load CSV ===
+file_path = r"C:\Users\Socce\Downloads\S79andS77_DailyAverageDischargeData.csv"
+df = pd.read_csv(file_path)
+
+# === Display head and tail ===
+print("=== HEAD OF DATAFRAME ===")
+display(df.head())
+
+print("\n=== TAIL OF DATAFRAME ===")
+display(df.tail())
     </code></pre>
+    
+<!-- Place this after your code block in data.html -->
+<img src="HeadAndTailDischargeDataFrame.jpg" alt="Head and Tail of Discharge DataFrame" style="max-width:100%; margin-top:1rem;">
 
     <h3 id="section4">4. Conclusion</h3>
     <p>The results suggest...</p>
