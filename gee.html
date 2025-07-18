@@ -231,22 +231,22 @@ Map.addLayer(aoi, {color: 'red'}, 'Area of Interest');
 </code></pre>
 <br></br>
 <br></br>
-    
-    <p><h5>Recommendations by Gemini for NDCI and FAI Bloom Thresholds:</h5>
+ <h3 id="section3">2. Recommendations by Gemini for NDCI and FAI Bloom Thresholds:</h3>
+    <p>
         <br>
-<b>Recommended Thresholds for Algal Bloom Detection</b>
-For the Caloosahatchee River estuary, which is a complex and optically variable water body, it's best to rely on thresholds established in similar environments. While locally-calibrated thresholds are always ideal, the following recommendations are based on strong evidence from published remote sensing studies.
-
-<i>Normalized Difference Chlorophyll Index (NDCI)</i>
+Recommended thresholds for algal bloom detection for the Caloosahatchee River estuary, which is a complex and optically variable water body, it's best to rely on thresholds established in similar environments. While locally-calibrated thresholds are always ideal, the following recommendations are based on strong evidence from published remote sensing studies.
 <br></br>
-The NDCI is excellent for quantifying chlorophyll-a concentration, making it well-suited to align with the FDEP's 40 µg/L guidance.
 <br></br>
-Recommended Threshold: 0.20
+<i><b>Normalized Difference Chlorophyll Index (NDCI)</b></i>
+<br></br>
+The NDCI is excellent for quantifying chlorophyll-a concentration, making it well-suited to align with the <b>FDEP's 40 µg/L guidance.</b>
+<br></br>
+<u>Recommended Threshold: 0.20</u>
 <br></br>
 Justification:
 A key study by Mishra and Mishra (2012), which originally proposed the NDCI for estuarine and coastal waters, provides a direct correlation between NDCI values and chlorophyll-a concentrations. Their findings include the following ranges:
 <br></br>
-**NDCI 0.2 to 0.4: Corresponds to 33-50 µg/L of chlorophyll-a.**
+<u>NDCI 0.2 to 0.4: Corresponds to 33-50 µg/L of chlorophyll-a.</u>
 <br></br>
 Given that the FDEP considers 40 µg/L of chlorophyll-a as the indicator for an algal bloom, setting the NDCI threshold at 0.20 is a scientifically-backed starting point. This value represents the lower bound of the chlorophyll-a range that encompasses the FDEP's bloom concentration, making it a robust choice for identifying significant algal biomass. An NDCI value greater than or equal to 0.2 indicates a high probability that chlorophyll-a concentrations are at or approaching bloom levels.
 
@@ -254,23 +254,23 @@ Given that the FDEP considers 40 µg/L of chlorophyll-a as the indicator for an 
 <br></br>
 <br></br>
 
-<i>Floating Algae Index (FAI)</i>
+<i><b>Floating Algae Index (FAI)</b></i>
 <br></br>
 The FAI is designed specifically to detect floating mats of algae on the water's surface. It is less of a quantitative measure of chlorophyll-a throughout the water column and more of a qualitative indicator of surface-scumming blooms, which are common in the Caloosahatchee. Because it's a different type of measurement, its threshold isn't directly tied to a specific chlorophyll-a concentration.
 <br></br>
-Recommended Threshold: 0.02
+<u>Recommended Threshold: 0.02</u>
 <br></br>
 Justification:
 The original FAI paper by Hu (2009) established the index but did not propose a universal threshold. Subsequent research has shown that even slightly positive FAI values can indicate the presence of floating matter. More recent studies have used various thresholds for bloom detection in different water bodies.
 <br></br>
-For your application, a conservative but effective threshold is recommended. The value of 0.02 is a commonly used starting point in the scientific community for distinguishing low-to-moderate density floating algae from the surrounding water.** Your previous script used a threshold of 0.02 for a "bloom" state, which aligns with this conservative approach. Since FAI is excellent at highlighting significant surface features, this threshold will effectively capture the dense surface blooms of concern in the estuary without being overly sensitive to submerged vegetation or other optical complexities.
+For your application, a conservative but effective threshold is recommended. The value of 0.02 is a commonly used starting point in the scientific community for distinguishing low-to-moderate density floating algae from the surrounding water. Previous scripts used a threshold of 0.02 for a "bloom" state, which aligns with this conservative approach. Since FAI is excellent at highlighting significant surface features, this threshold will effectively capture the dense surface blooms of concern in the estuary without being overly sensitive to submerged vegetation or other optical complexities.
 <br></br>
 <br></br>
 <br></br>
-New Script on Google Earth Engine under HAB directory, titled "GifAttempt_V2"</a></p>
+<h5>New Script on Google Earth Engine under HAB directory, titled "GifAttempt_V2"</h5></a></p>
     <br>
 
-    <h5 id="section3">Creates NDCI Data which will be used for figures and frames for GIF</h5>
+    <h5 id="section4">3. Creates NDCI Data which will be used for figures and frames for GIF</h5>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
 import ee
@@ -370,8 +370,8 @@ print("You can now use these PNG files in an online GIF maker or other software.
     <ul id="section-nav" class="nav flex-column nav-pills">
       <li class="nav-item"><a class="nav-link" href="#section1">Data Collection - Google Earth Engine</a></li>
       <li class="nav-item"><a class="nav-link" href="#section2">1. Script to Export Images from Google Earth Engine to Google Drive</a></li>
-      <li class="nav-item"><a class="nav-link" href="#section3">Section 3</a></li>
-      <li class="nav-item"><a class="nav-link" href="#section4">Section 4</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section3">2. Recommendations by Gemini for NDCI and FAI Bloom Thresholds:</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section4">3. Creates NDCI Data which will be used for figures and frames for GIF</a></li>
     </ul>
   </aside>
 
