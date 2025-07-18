@@ -99,10 +99,18 @@
   </div>
 
   <!-- Main Content -->
+
+<!-- ################################################################################### -->
+<!-- SECTION 1 -->
   <main class="main-content">
     <h1 id="section1">Data Collection - Google Earth Engine and Sentinel-2</h1>
+
     <br>
     <br>
+
+<!-- ################################################################################### -->
+<!-- SECTION 2 -->
+
     <h3 id="section2">1. Script to Export Images from Google Earth Engine to Google Drive</h3>
     <p>Sentinel-2 is a satellite with datasets at the 10m2 spatial resolution for multispectral imagery. 
         <br>
@@ -233,6 +241,9 @@ Map.addLayer(aoi, {color: 'red'}, 'Area of Interest');
 </code></pre>
 <br></br>
 <br></br>
+
+<!-- ################################################################################### -->
+<!-- SECTION 3 -->
  <h3 id="section3">2. Recommendations by Gemini for NDCI and FAI Bloom Thresholds:</h3>
     <p>
         <br>
@@ -272,6 +283,8 @@ For your application, a conservative but effective threshold is recommended. The
 <h5>New Script on Google Earth Engine under HAB directory, titled "GifAttempt_V2"</h5></a></p>
     <br>
 
+<!-- ################################################################################### -->
+<!-- SECTION 4 -->
     <h5 id="section4">3. Creates NDCI Data which will be used for figures and frames for GIF</h5>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
@@ -363,9 +376,22 @@ print(f"All frames have been saved to the '{output_dir}' folder.")
 print("You can now use these PNG files in an online GIF maker or other software.")
     </code></pre>
 
-    <h3 id="section4">4. Conclusion</h3>
+<!-- GIF of FAI and NDCI -->
+ <h5><c>GIF of Median NDCI Values per Month</c></h5>
+    <img src="NDCI_Gif_75speed.gif alt="NDCI GIF of Whole Study Area" style="max-width:100%; margin-top:1rem;">
+    <br></br>
+<h5><c>GIF of Median FAI Values per Month</c></h5>
+    <img src="FAI_Gif_75speed.gif alt="FAI GIF of Whole Study Area" style="max-width:100%; margin-top:1rem;">
+
+
+<!-- ################################################################################### -->
+<!-- SECTION 5 -->
+
+    <h3 id="section5">4. Hovmoller Plot</h3>
     <p>The results suggest...</p>
   </main>
+<!-- ##################################################################################################################################################################### -->
+<!-- END OF MAIN BODY -->
 
   <!-- Right Scrollspy Sidebar -->
   <aside class="sidebar-right position-fixed end-0 top-0 col-md-2 d-none d-md-block bg-light py-3" style="margin-top: 80px;">
