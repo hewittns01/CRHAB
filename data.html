@@ -106,11 +106,12 @@
     <br>
     <br>
     
-    <h3 id="section2">1. Download Discharge Data</h3>
+    <h3 id="section2">1. Download Discharge and Water Temperature Data</h3>
     <p>Discharge data for Caloosahatchee River stations available at the South Florida Water Management District's DBHYDRO website:</p>
     <p>Link: <a href="https://my.sfwmd.gov/dbhydroplsql/show_dbkey_info.main_menu">DBHYDRO Browser Menu</a></p>
     <br>
     <p>Mean daily discharge data was downloaded for stations S77_TOT and S77_S from January 1, 2019 to December 31, 2024.</p>
+    <p>Water temperature was downloaded for the same time frame from stations S77, S78, S79, CES02, CEs03, CES04, CES05, CES06, CES07, CES08 and CES09.</p>
     
     <br></br>
     <br></br>
@@ -195,7 +196,7 @@ plt.show()
     <br>
     <br>
 
-    <h3 id="section5">4. Inspect Water Temperature Data</h3>
+    <h3 id="section5">4. Inspect Water Temperature Data Frame</h3>
     <pre><code class="language-python">
 import pandas as pd
 
@@ -289,10 +290,10 @@ plt.show()
 
 
     </code></pre>
-    <br></br>
     <!-- Image of Individual Station Subplots for Water Temp Time Series -->
     <img src="AllStationsTemps_IndividualSubplots.png" alt="Image of Individual Station Subplots for Water Temp Time Series" style="max-width:100%; margin-top:1rem;">
     
+    <br>
     <br>
    
 <h5>Creating Combined Time Series Plot of Water Temperature from Each Station</h5>
@@ -337,7 +338,6 @@ plt.show()
 
 
     </code></pre>
-    <br></br>
     <!-- Image of Combined Time Series Plot of Water Temperature -->
     <img src="AllStationsTemps_CombinedPlot.png" alt="Image of Combined Time Series Plot of Water Temperature" style="max-width:100%; margin-top:1rem;">
     
@@ -353,9 +353,11 @@ plt.show()
   <aside class="sidebar-right position-fixed end-0 top-0 col-md-2 d-none d-md-block bg-light py-3" style="margin-top: 80px;">
     <ul id="section-nav" class="nav flex-column nav-pills">
       <li class="nav-item"><a class="nav-link" href="#section1">Data Collection - DBHYDRO</a></li>
-      <li class="nav-item"><a class="nav-link" href="#section2">1. Download Discharge Data</a></li>
-      <li class="nav-item"><a class="nav-link" href="#section3">2. Inspect Data Frame</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section2">1. Download Discharge and Water Temperature Data</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section3">2. Inspect Discharge Data Frame</a></li>
       <li class="nav-item"><a class="nav-link" href="#section4">3. Visualize Discharge Flows</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section5">4. Inspect Water Temperature Data Frame</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section4">5. Visualize Water Temperature Data</a></li>
     </ul>
   </aside>
 
