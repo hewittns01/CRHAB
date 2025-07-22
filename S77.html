@@ -230,28 +230,106 @@ plt.show()
     </code></pre>
     <br>
     <img src="S77Chlorophylla_TimeSeries.png" alt="S77 Chlorophyll-a time series" style="max-width:100%; margin-top:1rem;">
+    
+    <br>
     <br>
 
 
-    <h3 id="section3">2. Inspect Discharge Data Frame</h3>
+    <h3 id="section3">2. Merging Satellite Data with Discharge and Temperature Data</h3>
+    <p>Due to data availability, datasets were merged on 2-day, 3-day, and 5-day windows. This allowed for more data pairings while trying to keep the dates and results of water date close to the date of satellite imagery collection.</p>
+    <br>
+    <p><b>Code below is for 2-day window, 3 and 5-day were changed by replacing the number 2s in Step 6.</b></p>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
+# Import required libraries
 import pandas as pd
+from datetime import timedelta
 
-# === Load CSV ===
-file_path = r"C:\Users\Socce\Downloads\S79andS77_DailyAverageDischargeData.csv"
-df = pd.read_csv(file_path)
+# Step 1: Load the satellite indices CSV
+satellite_fp = "Extracted_Indices_S77.csv"  # Replace with your full path if needed
+sat_df = pd.read_csv(satellite_fp)
 
-# === Display head and tail ===
-print("=== HEAD OF DATAFRAME ===")
-display(df.head())
+# Step 2: Load the chlorophyll-a samples CSV
+chl_fp = "S77_Chlorophylla_Data_SamplesOnly.csv"  # Replace with your full path if needed
+chl_df = pd.read_csv(chl_fp)
 
-print("\n=== TAIL OF DATAFRAME ===")
-display(df.tail())
+# Step 3: Clean column names by stripping whitespace
+sat_df.columns = sat_df.columns.str.strip()
+chl_df.columns = chl_df.columns.str.strip()
+
+# Step 4: Convert date columns to datetime format
+sat_df['date'] = pd.to_datetime(sat_df['date'], errors='coerce')
+chl_df['Collection_Date'] = pd.to_datetime(chl_df['Collection_Date'], errors='coerce')
+
+# Step 5: Initialize a new column for matched Chlorophyll-a values
+sat_df['Chlorophylla_Measurement'] = None
+
+# Step 6: Iterate through each satellite record and find chlorophyll values within ±5 days
+for idx, sat_row in sat_df.iterrows():
+    sat_date = sat_row['date']
+    window_start = sat_date - timedelta(days=2)
+    window_end = sat_date + timedelta(days=2)
+
+    # Get a copy of the subset within the ±2 day window
+    matches = chl_df[
+        (chl_df['Collection_Date'] >= window_start) &
+        (chl_df['Collection_Date'] <= window_end)
+    ].copy()
+
+    if not matches.empty:
+        # Calculate absolute time difference to satellite date
+        matches['TimeDiff'] = (matches['Collection_Date'] - sat_date).abs()
+
+        # Choose the closest-in-time chlorophyll sample
+        # If multiple samples, the sample closest to the imagery collection date will be selected
+        closest_sample = matches.loc[matches['TimeDiff'].idxmin()]
+        sat_df.at[idx, 'Chlorophylla_Measurement'] = closest_sample['Value']
+
+
+# Step 7: Drop satellite rows that did not match any chlorophyll-a samples
+sat_df = sat_df.dropna(subset=['Chlorophylla_Measurement'])
+
+# Step 8: Save to new CSV
+output_fp = "S77_Satellite_Chlorophylla_for_ThresholdingValues_2DayWindow.csv"
+sat_df.to_csv(output_fp, index=False)
+
+print(f"✅ Merged dataset saved to: {output_fp}")
+print(sat_df.shape)
     </code></pre>
-
+<br>
+<p><b>Accuracy results of the 2-day, 3-day, and 5-day windows:</b></p>
+<br>
+<p><i>2-day Window:</i><br>
+    FAI ~ Chlorophyll-a: y = 1.1615 * x + 38.0137<br>
+    NDCI ~ Chlorophyll-a: y = 0.0021 * x + -0.0458<br>
+    Index thresholds for 40.0 µg/L Chlorophyll-a:<br>
+    FAI Threshold: 84.4721<br>
+    NDCI Threshold: 0.0398</p>
+<br>
+<br>
+<p><i>3-day Window:</i><br>
+    FAI ~ Chlorophyll-a: y = 0.3801 * x + 50.1661<br>
+    NDCI ~ Chlorophyll-a: y = 0.0020 * x + -0.0261<br>
+    Index thresholds for 40.0 µg/L Chlorophyll-a:<br>
+    FAI Threshold: 65.3719<br>
+    NDCI Threshold: 0.0535</p>
+<br>
+<br><p><i>5-day Window:</i><br>
+    FAI ~ Chlorophyll-a: y = -0.7844 * x + 56.5624<br>
+    NDCI ~ Chlorophyll-a: y = 0.0017 * x + -0.0205<br>
+    Index thresholds for 40.0 µg/L Chlorophyll-a:<br>
+    FAI Threshold: 25.1850<br>
+    NDCI Threshold: 0.0470</p>
+<br>
 <!-- Place this after your code block in data.html -->
-<img src="HeadAndTailDischargeDataFrame.jpg" alt="Head and Tail of Discharge DataFrame" style="max-width:100%; margin-top:1rem;">
+<img src="S77_2DayRegression_NDCI_and_FAI.png" alt="2-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
+<br>
+<!-- Place this after your code block in data.html -->
+<img src="S77_3DayRegression_NDCI_and_FAI.png" alt="3-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
+<br>
+<!-- Place this after your code block in data.html -->
+<img src="S77_5DayRegression_NDCI_and_FAI.png" alt="5-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
+
 
 <br></br>
 <br></br>
