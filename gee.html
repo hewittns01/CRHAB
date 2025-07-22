@@ -386,8 +386,123 @@ print("You can now use these PNG files in an online GIF maker or other software.
 <!-- SECTION 5 -->
 
     <h3 id="section5">4. Hovmoller Plot</h3>
-    <p>The results suggest...</p>
-  </main>
+    <br>
+    <p>Utilizes exported images from Google Earth Engine to create the plot. Need to change the file path and ensure the images are the FAI and NDCI images.<br>
+    Code is the same for both NDCI and FAI, just need to switch out the index_to_plot variable depending on which index the figure is to be created for.</p>
+  <pre><code class="language-python">
+import os
+import glob
+import xarray as xr
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from matplotlib.colors import ListedColormap, BoundaryNorm
+
+# --- 1. SETUP: Define what you want to plot ---
+
+data_dir = "D:/Summer_ML_HAB/Sentinel2_NDCI_FAI_BiMonthly"
+START_YEAR = 2019
+END_YEAR = 2024
+index_to_plot = 'FAI' # CHANGE THIS to 'NDCI' or 'FAI'
+output_filename = f'{index_to_plot}_Hovmoller_CustomColor_{START_YEAR}-{END_YEAR}.png'
+
+# --- 1a. DEFINE CUSTOM COLOR SCHEMES ---
+
+color_params = {
+    'NDCI': {
+        'colors': ['#00008B', '#0000FF', '#FFFF00', '#FF4500', '#8B0000'],
+        'bounds': [-0.2, 0.0, 0.1, 0.2, 0.3, 0.5],
+        'labels': ['Clear Water', 'Low Presence', 'Possible Bloom', 'Bloom', 'High Bloom']
+    },
+    'FAI': {
+        'colors': ['#00008B', '#0000FF', '#FFFF00', '#FF4500', '#8B0000'],
+        'bounds': [-0.01, 0.0, 0.02, 0.05, 0.1, 0.2],
+        'labels': ['Clear Water', 'Low Floating', 'Possible Bloom', 'Bloom', 'High Bloom']
+    }
+}
+
+params = color_params[index_to_plot]
+custom_cmap = ListedColormap(params['colors'])
+custom_norm = BoundaryNorm(params['bounds'], custom_cmap.N)
+
+print(f"Starting plot generation for {index_to_plot} from {START_YEAR} to {END_YEAR}...")
+
+# --- 2. LOAD DATA INTO AN XARRAY DATA CUBE ---
+
+all_fnames = sorted(glob.glob(os.path.join(data_dir, f'{index_to_plot}_*.tif')))
+fnames = []
+for fname in all_fnames:
+    year = int(os.path.basename(fname).split('_')[1])
+    if START_YEAR <= year <= END_YEAR:
+        fnames.append(fname)
+
+time_coords = []
+for fname in fnames:
+    parts = os.path.basename(fname).split('_')
+    year, month, period_info = parts[1], parts[2], parts[3]
+    day = 1 if period_info == 'a' else 16
+    time_coords.append(np.datetime64(f'{year}-{month}-{day:02d}'))
+
+ds = xr.open_mfdataset(
+    fnames,
+    engine='rasterio',
+    combine='nested',
+    concat_dim='time'
+).to_array().rename({'x': 'longitude', 'y': 'latitude'})
+ds = ds.assign_coords(time=time_coords)
+
+print(f"Loaded {len(fnames)} images into a data cube.")
+
+# --- 3. PROCESS DATA: Create the Latitude-Time Data ---
+
+hovmoller_data = ds.mean(dim='longitude', skipna=True)
+hovmoller_data = hovmoller_data.squeeze()
+print("Averaged data across longitudes.")
+
+# --- 4. CREATE THE PLOT ---
+
+fig, ax = plt.subplots(figsize=(15, 6))
+
+im = hovmoller_data.transpose().plot.pcolormesh(
+    ax=ax,
+    x='time',
+    y='latitude',
+    cmap=custom_cmap,
+    norm=custom_norm,
+    add_colorbar=False
+)
+
+ax.set_title(f'Latitude-Time Series of {index_to_plot} ({START_YEAR}-{END_YEAR})', fontsize=16)
+ax.set_xlabel('Time', fontsize=12)
+ax.set_ylabel('Latitude (°N)', fontsize=12)
+
+cbar = plt.colorbar(im, ax=ax, orientation='vertical', pad=0.01)
+cbar.set_label(f'{index_to_plot} Severity', fontsize=12)
+
+# --- FIX: Add descriptive labels to the colorbar ---
+# Calculate the midpoint of each color block to position the labels
+tick_locations = []
+for i in range(len(params['bounds']) - 1):
+    midpoint = (params['bounds'][i] + params['bounds'][i+1]) / 2
+    tick_locations.append(midpoint)
+
+# Set the ticks and labels on the colorbar
+cbar.set_ticks(tick_locations)
+cbar.set_ticklabels(params['labels'])
+# --- End of fix ---
+
+plt.tight_layout()
+plt.savefig(output_filename, dpi=300)
+print(f"\nPlot saved successfully: {output_filename}")
+plt.show()
+    </code></pre>
+    <br>
+<!-- GIF of FAI and NDCI -->
+    <img src="NDCI_Hovmoller_CustomColor_2019-2024.png" alt="NDCI Hovmoller Plot with Custom Colors" style="max-width:100%; margin-top:1rem;">
+    <br></br>
+    <img src="FAI_Hovmoller_CustomColor_2019-2024.png" alt="FAI Hovmoller Plot with Custom Colors" style="max-width:100%; margin-top:1rem;">
+
+</main>
 <!-- ##################################################################################################################################################################### -->
 <!-- END OF MAIN BODY -->
 
