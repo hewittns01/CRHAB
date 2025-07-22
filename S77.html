@@ -467,7 +467,7 @@ plt.show()
 
 
     <h3 id="section5">4. Merging Temperature and Discharge Data to Satellite and Chlorophyll-a Data</h3>
-    <h5>Merging the datasets together, utilizing the 3-day window due to highest accuracy from the window periods.</h5>\
+    <h5>Merging the datasets together, utilizing the 3-day window due to highest accuracy from the window periods.</h5>
     <p>Applying a 3-day window to the temperature and discharge data as well, to better match up to the Satellite and Chlorophyll-a data:</p>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
@@ -563,11 +563,118 @@ print(f"\nSuccessfully created the merged file: '{output_filename}'")
 
     <br>
 
-    <h3 id="section6">5. Exploratory Analysis Before Models</h3>
+    <h3 id="section6">5. Exploratory Data Analysis Before Models</h3>
     <h5>Recommended by AI to better understand the dataset and generate more figures</h5>
-    
+    <p>Code block recommended by AI for this analysis:</p>
     <br>
-   
+   <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+    import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# --- Step 1: Load Your Final Merged Dataset ---
+file_path = 'S77_Merged_Data_3DayWindow.csv'
+
+try:
+    df = pd.read_csv(file_path)
+    # Ensure the 'date' column is a datetime object for plotting
+    df['date'] = pd.to_datetime(df['date'])
+    print("Merged dataset loaded successfully.")
+except FileNotFoundError:
+    print(f"FATAL ERROR: The file '{file_path}' was not found.")
+    print("Please ensure the merged CSV from the previous step is in the same directory.")
+    raise
+
+# --- Step 2: Prepare Data for Analysis ---
+# For robust analysis, we'll drop rows that have missing environmental data
+df_analysis = df.dropna(subset=['Temperature_C', 'Discharge_cfs']).copy()
+print(f"Original data points: {len(df)}")
+print(f"Data points for analysis (after removing nulls): {len(df_analysis)}")
+
+
+# --- Step 3: Visualize and Save Time Series Data ---
+print("\nGenerating Time Series plots...")
+fig, axes = plt.subplots(3, 1, figsize=(15, 12), sharex=True)
+fig.suptitle('Time Series of Key Variables at Station S77', fontsize=18)
+
+# Plot 1: Chlorophyll-a
+axes[0].plot(df_analysis['date'], df_analysis['Chlorophylla_Measurement'], color='green', marker='o', linestyle='-')
+axes[0].set_ylabel('Chlorophyll-a (µg/L)')
+axes[0].set_title('Chlorophyll-a Measurements')
+axes[0].grid(True)
+
+# Plot 2: Water Temperature
+axes[1].plot(df_analysis['date'], df_analysis['Temperature_C'], color='red', marker='o', linestyle='-')
+axes[1].set_ylabel('Temperature (°C)')
+axes[1].set_title('Water Temperature')
+axes[1].grid(True)
+
+# Plot 3: Discharge
+axes[2].plot(df_analysis['date'], df_analysis['Discharge_cfs'], color='blue', marker='o', linestyle='-')
+axes[2].set_ylabel('Discharge (cfs)')
+axes[2].set_title('River Discharge')
+axes[2].set_xlabel('Date')
+axes[2].grid(True)
+
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+# --- ADDED LINE: Save the figure ---
+plt.savefig('time_series_plots.png', dpi=300) # dpi=300 for high resolution
+plt.show()
+
+
+# --- Step 4: Visualize and Save Relationships with Scatter Plots ---
+print("\nGenerating Scatter plots...")
+plt.figure(figsize=(16, 7))
+
+# Scatter 1: Temperature vs. Chlorophyll-a
+plt.subplot(1, 2, 1)
+sns.scatterplot(data=df_analysis, x='Temperature_C', y='Chlorophylla_Measurement', alpha=0.7)
+plt.title('Temperature vs. Chlorophyll-a')
+plt.xlabel('Water Temperature (°C)')
+plt.ylabel('Chlorophyll-a (µg/L)')
+plt.grid(True)
+
+# Scatter 2: Discharge vs. Chlorophyll-a
+plt.subplot(1, 2, 2)
+sns.scatterplot(data=df_analysis, x='Discharge_cfs', y='Chlorophylla_Measurement', alpha=0.7)
+plt.title('Discharge vs. Chlorophyll-a')
+plt.xlabel('River Discharge (cfs)')
+plt.ylabel('Chlorophyll-a (µg/L)')
+plt.grid(True)
+
+plt.tight_layout()
+# --- ADDED LINE: Save the figure ---
+plt.savefig('scatter_plots.png', dpi=300)
+plt.show()
+
+# --- Step 5: Quantify and Save Relationships with a Correlation Matrix ---
+print("\nGenerating Correlation Matrix Heatmap...")
+# Select only the key numerical columns for the correlation matrix
+correlation_cols = ['Chlorophylla_Measurement', 'ndci', 'fai', 'Temperature_C', 'Discharge_cfs']
+correlation_matrix = df_analysis[correlation_cols].corr()
+
+# Create a heatmap to visualize the matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=.5)
+plt.title('Correlation Matrix of Key Variables')
+# --- ADDED LINE: Save the figure ---
+plt.savefig('correlation_heatmap.png', dpi=300)
+plt.show()
+
+print("\nExploratory Data Analysis Complete. Plots saved to your directory.")
+    </code></pre>
+    <br>
+<!-- Place this after your code block in data.html -->
+<img src="Times_Series_Plots_S77_3DayWindow.png" alt="Chla, Temp, and Discharge Times Series Plot at S77" style="max-width:100%; margin-top:1rem;">
+<br>
+<!-- Place this after your code block in data.html -->
+<img src="Scatter_Plots_S77_3DayWindow.png" alt="Scatter Plots of Temp vs. Chla and Dis vs. Chla at S77" style="max-width:100%; margin-top:1rem;">
+<br>
+<!-- Place this after your code block in data.html -->
+<img src="Correlation_Heatmap_S77_3DayWindow.png" alt="Heatmap of Parameters at S77" style="max-width:100%; margin-top:1rem;">
+<br>
+
   </main>
   <!-- ##################################################################################################################################################################### -->
   <!-- END OF THE MAIN BODY OF THE WEBPAGE -->
