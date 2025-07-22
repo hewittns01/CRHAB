@@ -674,6 +674,29 @@ print("\nExploratory Data Analysis Complete. Plots saved to your directory.")
 <!-- Place this after your code block in data.html -->
 <img src="Correlation_Heatmap_S77_3DayWindow.png" alt="Heatmap of Parameters at S77" style="max-width:100%; margin-top:1rem;">
 <br>
+<br>
+<p><b>Time Series Plots</b><br>
+Seasonality: Temperature shows a clear, predictable seasonal cycle. Chlorophyll-a also appears to be seasonal, with most of the high-concentration events occurring in the cooler winter and spring months.<br>
+
+Discharge Events: Discharge is highly variable and driven by specific events (likely rainfall and water management). There are long periods of low flow punctuated by massive spikes in discharge.<br>
+
+<b>Scatter Plots & Correlation</b><br>
+These plots provide the most important insights for building a predictive model.<br>
+
+Discharge is a Key Driver: The scatter plot shows a very distinct pattern: high chlorophyll-a blooms (> 40 µg/L) only occur when river discharge is low (less than ~2,000 cfs). When discharge is high, blooms appear to be flushed out of the system, keeping chlorophyll-a concentrations low. The correlation of -0.24 confirms this negative relationship.<br>
+
+Temperature Has a "Sweet Spot": The relationship with temperature is not a simple line. The highest chlorophyll-a values tend to cluster in a moderate temperature range (approx. 20-27°C). Very hot and very cold temperatures are both associated with lower chlorophyll-a levels. The weak correlation of -0.12 confirms that a simple linear model for temperature won't work well.<br>
+
+Satellite Indices: The heatmap confirms our previous findings. NDCI has the best (but still weak) positive correlation with Chlorophyll-a at 0.17. FAI shows no meaningful correlation.<br>
+
+Summary & Next Steps 💡<br>
+The exploratory analysis was a success. We've moved from a weak correlation with a single index to a much clearer understanding of the system's drivers.<br>
+
+Your primary predictors for a bloom appear to be low discharge and moderate temperatures.<br>
+
+A simple linear model will likely not be very accurate because of the non-linear relationship with temperature.</p>
+<br>
+<br>
 
   </main>
   <!-- ##################################################################################################################################################################### -->
