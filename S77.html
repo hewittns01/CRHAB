@@ -107,7 +107,7 @@
     <br>
     <br>
     
-    <h3 id="section2">1. Isolating S77 Station Data from Datasets</h3>
+    <h3 id="section2">1. Isolating S77 Station Data from Satellite and Chlorophyll-a Datasets</h3>
     <p>Code below loads the master file of all stations and all available Sentinel-2 images, with NDCI and FAI calculated. This code isolates only the S77 station for analysis, and drops dates with no imagery for the station.</p>
     <br>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
@@ -466,11 +466,105 @@ plt.show()
 <img src="S77_Discharge_TimeSeries.png" alt="Discharge Time Series at S77" style="max-width:100%; margin-top:1rem;">
 
 
-    <h3 id="section5">4. Inspect Water Temperature Data Frame</h3>
+    <h3 id="section5">4. Merging Temperature and Discharge Data to Satellite and Chlorophyll-a Data</h3>
+    <h5>Merging the datasets together, utilizing the 3-day window due to highest accuracy from the window periods.</h5>\
+    <p>Applying a 3-day window to the temperature and discharge data as well, to better match up to the Satellite and Chlorophyll-a data:</p>
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+import pandas as pd
+
+# --- Step 1: Define File Paths ---
+# Make sure these CSV files are in the same directory as your Jupyter Notebook
+satellite_file = 'S77_Satellite_Chlorophylla_for_ThresholdingValues_3DayWindow.csv'
+temp_file = 'WaterTemp_S77.csv'
+discharge_file = 'S77_DischargeData.csv'
+
+# --- Step 2: Load and Prepare the DataFrames ---
+
+# Load the main satellite data
+try:
+    df_sat = pd.read_csv(satellite_file)
+    # Convert 'date' column to datetime objects for accurate merging
+    df_sat['date'] = pd.to_datetime(df_sat['date'])
+    print("Satellite data loaded successfully.")
+except FileNotFoundError:
+    print(f"Error: Could not find the file '{satellite_file}'")
+    raise
+
+# Load and prepare the discharge data (still using an exact match for this)
+try:
+    df_discharge = pd.read_csv(discharge_file)
+    df_discharge['Date'] = pd.to_datetime(df_discharge['Date'], format='%d-%b-%y')
+    df_discharge = df_discharge[['Date', 'Data Value']].rename(
+        columns={'Date': 'date', 'Data Value': 'Discharge_cfs'}
+    )
+    # Perform the initial merge for discharge
+    df_merged = pd.merge(df_sat, df_discharge, on='date', how='left')
+    print("Discharge data loaded and merged.")
+except FileNotFoundError:
+    print(f"Warning: Could not find the discharge file '{discharge_file}'.")
+    df_merged = df_sat # If no file, continue with just the satellite data
+except Exception as e:
+    print(f"An error occurred while processing the discharge file: {e}")
+    df_merged = df_sat
+
+# Load and prepare the temperature data
+try:
+    df_temp = pd.read_csv(temp_file)
+    df_temp = df_temp[df_temp['Test Name'] == 'Temperature']
+    df_temp['Date'] = pd.to_datetime(df_temp['Date'])
+    df_temp = df_temp[['Date', 'Value']].rename(
+        columns={'Date': 'date', 'Value': 'Temperature_C'}
+    )
+    print("Temperature data loaded and prepared.")
+except FileNotFoundError:
+    print(f"Warning: Could not find the temperature file '{temp_file}'.")
+    df_temp = None
+except Exception as e:
+    print(f"An error occurred while processing the temperature file: {e}")
+    df_temp = None
+
+# --- Step 3: Merge Temperature Data with a 3-Day Window ---
+
+if df_temp is not None:
+    # IMPORTANT: merge_asof requires both dataframes to be sorted by the merge key ('date')
+    df_merged = df_merged.sort_values(by='date')
+    df_temp = df_temp.sort_values(by='date')
+
+    # Use merge_asof to find the nearest temperature reading within the tolerance
+    df_final = pd.merge_asof(
+        df_merged,
+        df_temp,
+        on='date',
+        direction='nearest', # Finds the closest date (before or after)
+        tolerance=pd.Timedelta('3 days') # Sets the maximum +/- window
+    )
+    print("\nMerged with temperature data using a 3-day window.")
+else:
+    df_final = df_merged # If no temp data, the final df is the one with discharge
+
+# --- Step 4: Inspect and Save the Final Dataset ---
+
+print("\n--- Final Merged DataFrame ---")
+print(df_final.head())
+
+# Check how many of the new columns are empty (null)
+print("\n--- Missing Values in New Columns ---")
+print(df_final[['Discharge_cfs', 'Temperature_C']].isnull().sum())
+
+# Define the output filename
+output_filename = 'S77_Merged_Data_3DayWindow.csv'
+
+# Save the final merged dataframe to a new CSV file
+df_final.to_csv(output_filename, index=False)
+
+print(f"\nSuccessfully created the merged file: '{output_filename}'")
+    </code></pre>
 
     <br>
 
-    <h3 id="section6">5. Visualize Water Temperature Data</h3>
+    <h3 id="section6">5. Exploratory Analysis Before Models</h3>
+    <h5>Recommended by AI to better understand the dataset and generate more figures</h5>
     
     <br>
    
