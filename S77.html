@@ -697,7 +697,89 @@ Your primary predictors for a bloom appear to be low discharge and moderate temp
 A simple linear model will likely not be very accurate because of the non-linear relationship with temperature.</p>
 <br>
 <br>
+<h5>Exploratory Analysis Including Satellite Indices</h5>
+<p>Code block recommeded by Gemini:</p>
+<pre><code class="language-python">
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
+# --- Step 1: Load Your Final Merged Dataset ---
+file_path = 'S77_Merged_Data_3DayWindow.csv'
+
+try:
+    df = pd.read_csv(file_path)
+    print("Merged dataset loaded successfully.")
+except FileNotFoundError:
+    print(f"FATAL ERROR: The file '{file_path}' was not found.")
+    raise
+
+# --- Step 2: Prepare Data and Define Bloom Category ---
+# Drop rows that have missing environmental data
+df_analysis = df.dropna(subset=['Temperature_C', 'Discharge_cfs']).copy()
+
+# Define the bloom threshold
+bloom_threshold = 20.0  # Chlorophyll-a >= 20 µg/L
+
+# Create the binary 'Bloom' column
+df_analysis['Bloom'] = (df_analysis['Chlorophylla_Measurement'] >= bloom_threshold).astype(int)
+# For clearer plot labels, we'll also create a text version
+df_analysis['Bloom_Label'] = df_analysis['Bloom'].map({1: 'Bloom', 0: 'Non-Bloom'})
+
+print(f"\nDefined 'Bloom' as Chlorophyll-a >= {bloom_threshold} µg/L.")
+print("Bloom vs. Non-Bloom counts:")
+print(df_analysis['Bloom_Label'].value_counts())
+
+
+# --- Step 3: Compare Predictor Distributions with Box Plots ---
+print("\nGenerating comparison box plots...")
+# Define the variables we want to plot
+predictor_vars = ['ndci', 'fai', 'Temperature_C', 'Discharge_cfs']
+
+# Create a 2x2 subplot
+fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+fig.suptitle('Comparison of Predictor Distributions for Bloom vs. Non-Bloom Conditions', fontsize=18)
+# Flatten the axes array for easy iteration
+axes = axes.flatten()
+
+for i, var in enumerate(predictor_vars):
+    sns.boxplot(x='Bloom_Label', y=var, data=df_analysis, ax=axes[i], order=['Non-Bloom', 'Bloom'])
+    axes[i].set_title(f'Distribution of {var}', fontsize=14)
+    axes[i].set_xlabel('')
+    axes[i].set_ylabel(f'{var} Value')
+
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+# --- Save the figure ---
+plt.savefig('classification_eda_boxplots.png', dpi=300)
+plt.show()
+
+print("\nClassification EDA Complete. Plot saved as 'classification_eda_boxplots.png'")
+    </code></pre>
+<p>Output:<br>
+Defined 'Bloom' as Chlorophyll-a >= 20.0 µg/L.<br>
+Bloom vs. Non-Bloom counts:<br>
+Bloom_Label<br>
+Non-Bloom    68<br>
+Bloom        16<br>
+Name: count, dtype: int64</p>
+
+<br>
+
+<!-- Place this after your code block in data.html -->
+<img src="S77_Classification_EDA_Boxplots.png" alt="Boxplots of NDCI, FAI, Temp, and Discharge" style="max-width:100%; margin-top:1rem;">
+<br>
+<br>
+<p><b>Key Insights from the Box Plots</b><br>
+<u>Discharge is the Strongest Predictor:</u> There is a dramatic difference between the two categories. Blooms almost exclusively occur under <u>low discharge</u> conditions. The "Bloom" box is very small and sits at the bottom of the scale, while the "Non-Bloom" category contains all of the high-discharge events.<br>
+
+<u>Temperature is a Good Predictor:</u> Blooms favor a <u>cooler, narrower range of temperatures.</u> The median temperature for "Bloom" is visibly lower than for "Non-Bloom", and the box is much tighter.<br>
+
+<u>Satellite Indices are Weak Predictors (On Their Own):</u> While the median <u>NDCI</u> and <u>FAI</u> are slightly higher during blooms, the boxes have a massive amount of overlap. This means that while they might provide some helpful information, they are not reliable enough to separate "Bloom" from "Non-Bloom" conditions by themselves. <br><br>
+
+<b>What This Means for Your Model</b>
+Your EDA has been highly successful. The clear takeaway is that a classification model should rely heavily on <u>Discharge</u> and <u>Temperature</u> as predictive features. A model that uses all four variables will likely perform best, but it will learn that discharge is the most important factor in determining whether a bloom is likely to occur.</p>
+<br>
+<br>
   </main>
   <!-- ##################################################################################################################################################################### -->
   <!-- END OF THE MAIN BODY OF THE WEBPAGE -->
