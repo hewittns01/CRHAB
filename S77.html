@@ -235,7 +235,7 @@ plt.show()
     <br>
 
 
-    <h3 id="section3">2. Merging Satellite Data with Discharge and Temperature Data</h3>
+    <h3 id="section3">2. Merging Satellite Data with Chlorophyll-a Data</h3>
     <p>Due to data availability, datasets were merged on 2-day, 3-day, and 5-day windows. This allowed for more data pairings while trying to keep the dates and results of water date close to the date of satellite imagery collection.</p>
     <br>
     <p><b>Code below is for 2-day window, 3 and 5-day were changed by replacing the number 2s in Step 6.</b></p>
@@ -334,210 +334,146 @@ print(sat_df.shape)
 <br></br>
 <br></br>
 
-    <h3 id="section4">3. Visualize Discharge Flows</h3>
+    <h3 id="section4">3. Isolating and Analyzing S77 Discharge and Water Temperature Data</h3>
+    <br>
+    <h5>Starting with Water Temperature Data:</h5>
+    <p>Code below loads filters the water temperature data to S77 and SAMP data.</p>
+<button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
-import pandas as pd
-import matplotlib.pyplot as plt
+    import pandas as pd
 
-# Load the data
-file_path = r"C:\Users\Socce\Downloads\S79andS77_DailyAverageDischargeData.csv"
+# Load the CSV file
+file_path = "WaterTemp_AllStations.csv"
 df = pd.read_csv(file_path)
 
-# Clean and parse
+# Strip any extra whitespace in column names
 df.columns = df.columns.str.strip()
+
+# Filter for Station_Id == 'S77'
+df_s77 = df[df['Station ID'] == 'S77']
+
+# Filter for only Chlorophyll-a samples
+df_s77 = df_s77[df_s77['Sample Type New'] == 'SAMP']
+
+# Preview the result
+print(df_s77.head())
+print(df_s77.shape)
+# Export to a new CSV
+output_path = "WaterTemp_S77.csv"
+df_s77.to_csv(output_path, index=False)
+    </code></pre>
+    <br>
+    <p>Generating a time series of S77 Water Temperature:</p>
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+    import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load the filtered dataset
+file_path = "WaterTemp_S77.csv"
+df = pd.read_csv(file_path)
+
+# Strip any extra whitespace in column names
+df.columns = df.columns.str.strip()
+
+# Convert Collection_Date to datetime
+df['Collection_Date'] = pd.to_datetime(df['Collection_Date'], errors='coerce')
+
+# Drop rows with invalid or missing dates or values
+df = df.dropna(subset=['Collection_Date', 'Value'])
+
+# Sort by date
+df = df.sort_values('Collection_Date')
+
+# Plot
+plt.figure(figsize=(12, 6))
+plt.plot(df['Collection_Date'], df['Value'], marker='o', linestyle='-')
+plt.xlabel('Collection Date')
+plt.ylabel('Temperature (°C)')
+plt.title('Temperature Time Series at S77')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+    </code></pre>
+    <br>
+    <!-- Place this after your code block in data.html -->
+<img src="S77_Temperature_TimeSeries.png" alt="Temperature Time Series at S77" style="max-width:100%; margin-top:1rem;">
+<br>
+<br>
+<h5>Switching to Discharge Data:</h5>
+<p>Code below filters to the S77_S station (same location as S77, but is where the discharge flow rate is measured).</p>
+ <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+    import pandas as pd
+
+# Load the CSV file
+file_path = "S79andS77_DailyAverageDischargeData.csv"
+df = pd.read_csv(file_path)
+print(f'Original df size: {df.shape}')
+
+# Strip any extra whitespace in column names
+df.columns = df.columns.str.strip()
+
+# Filter for Station_Id == 'S77'
+df_s77 = df[df['Station'] == 'S77_S']
+
+# Preview the result
+print('')
+print(df_s77.head())
+print('')
+print(f'Only S77 df size: {df_s77.shape}')
+
+# Export to a new CSV
+output_path = "S77_DischargeData.csv"
+df_s77.to_csv(output_path, index=False)
+    </code></pre>
+    <br>
+    <p>Generating a time series of S77 Discharge:</p>
+<button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+    import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load the filtered dataset
+file_path = "S77_DischargeData.csv"
+df = pd.read_csv(file_path)
+
+# Strip any extra whitespace in column names
+df.columns = df.columns.str.strip()
+
+# Convert Collection_Date to datetime
 df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
 
-# Filter and pivot
-filtered_df = df[df['Station'].isin(['S77_S', 'S79_TOT'])]
-pivot_df = filtered_df.pivot(index='Date', columns='Station', values='Data Value')
+# Drop rows with invalid or missing dates or values
+df = df.dropna(subset=['Date', 'Data Value'])
 
-# Set up subplots
-fig, axs = plt.subplots(3, 1, figsize=(16, 12), sharex=True)
+# Sort by date
+df = df.sort_values('Date')
 
-# Plot S77 only
-axs[0].plot(pivot_df.index, pivot_df['S77_S'], color='blue', label='S77 Discharge')
-axs[0].set_title('S77 Daily Average Discharge (cfs)')
-axs[0].set_ylabel('Discharge (cfs)')
-axs[0].legend()
-axs[0].grid(True)
-
-# Plot S79 only
-axs[1].plot(pivot_df.index, pivot_df['S79_TOT'], color='green', label='S79 Discharge')
-axs[1].set_title('S79 Daily Average Discharge (cfs)')
-axs[1].set_ylabel('Discharge (cfs)')
-axs[1].legend()
-axs[1].grid(True)
-
-# Plot both overlaid
-axs[2].plot(pivot_df.index, pivot_df['S77_S'], label='S77 Discharge', color='blue')
-axs[2].plot(pivot_df.index, pivot_df['S79_TOT'], label='S79 Discharge', color='green')
-axs[2].set_title('S77 vs S79 Daily Average Discharge (cfs)')
-axs[2].set_xlabel('Date')
-axs[2].set_ylabel('Discharge (cfs)')
-axs[2].legend()
-axs[2].grid(True)
-
-# Layout
+# Plot
+plt.figure(figsize=(12, 6))
+plt.plot(df['Date'], df['Data Value'], marker='o', linestyle='-')
+plt.xlabel('Date')
+plt.ylabel('Daily Discharge (cfs)')
+plt.title('Discharge Time Series at S77')
+plt.grid(True)
 plt.tight_layout()
-plt.savefig("Discharge_3Subplots.png", dpi=300)
-print(f"\nPlot saved successfully: {"Discharge_3Subplots.png"}")
+plt.savefig('S77_Discharge_TimeSeries.png', dpi=300)
 plt.show()
-
     </code></pre>
-    <br></br>
-    <!-- Image of Dischage 3 Subplots -->
-    <img src="Discharge_3Subplots.png" alt="Graph of Discharges from S77, S79, and Combined Overlay" style="max-width:100%; margin-top:1rem;">
+    <br>
+    <!-- Place this after your code block in data.html -->
+<img src="S77_Discharge_TimeSeries.png" alt="Discharge Time Series at S77" style="max-width:100%; margin-top:1rem;">
 
-    <br>
-    <br>
 
     <h3 id="section5">4. Inspect Water Temperature Data Frame</h3>
-    <pre><code class="language-python">
-import pandas as pd
 
-# Load both CSVs
-df1 = pd.read_csv("Stations_WaterTemp.csv")
-df2 = pd.read_csv("S79_WaterTemp.csv")
-
-# Clean column names
-df1.columns = df1.columns.str.strip()
-df2.columns = df2.columns.str.strip()
-
-# Combine the two dataframes
-combined_df = pd.concat([df1, df2], ignore_index=True)
-
-combined_df = combined_df.drop_duplicates()
-# Drop the 'S77_T' row
-combined_df = combined_df[combined_df['Station ID'] != 'S77_T']
-
-#Dropping extreme outlier in data that is not probably (saying over 40 degrees C measured)
-# Remove outliers above 40 °C
-combined_df = combined_df[combined_df['Value'] <= 40]
-
-
-# Display combined result
-print("=== HEAD OF COMBINED DATAFRAME ===")
-display(combined_df.head())
-
-print("\n=== TAIL OF COMBINED DATAFRAME ===")
-display(combined_df.tail())
-
-# Print updated Station ID counts
-print("\n=== UPDATED SAMPLE COUNT PER STATION ID ===")
-print(combined_df['Station ID'].value_counts())
-
-combined_df.to_csv("WaterTemp_AllStations.csv", index=False)
-
-    </code></pre>
-    <br></br>
-    <!-- Image of Head of Temp Data Frame -->
-    <img src="HeadTempDataFrame.jpg" alt="Image of Head of Temp Data Frame" style="max-width:100%; margin-top:1rem;">
-    <br>
-     <!-- Image of Tail of Temp Data Frame -->
-    <img src="TailTempDataFrame.jpg" alt="Image of Tail of Temp Data Frame" style="max-width:100%; margin-top:1rem;">
-    <br>
-     <!-- Image of Number of Samples per Unique Station for Temp Data -->
-    <img src="SamplesPerStationTempData.jpg" alt="Image of Number of Samples per Unique Station for Temp Dat" style="max-width:100%; margin-top:1rem;">
-
-    <br>
     <br>
 
     <h3 id="section6">5. Visualize Water Temperature Data</h3>
-    <h5>Creating Time Series Plots of Water Temperature for Each Station</h5>
-    <h5>Stations in order from Lake Okeechobee down through the Caloosahatchee River and to the Caloosahatchee River Estuary</h5>
-    <pre><code class="language-python">
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# Load the merged dataset
-file_path = "WaterTemp_AllStations.csv"
-df = pd.read_csv(file_path)
-
-# Clean column names
-df.columns = df.columns.str.strip()
-
-# Parse Collection_Date to datetime
-df['Collection_Date'] = pd.to_datetime(df['Collection_Date'], errors='coerce')
-
-# Filter date range
-mask = (df['Collection_Date'] >= '2019-01-01') & (df['Collection_Date'] <= '2024-12-31')
-df = df[mask]
-
-# Desired station order
-station_order = ['S77', 'S78', 'S79', 'CES02', 'CES03', 'CES04', 'CES05', 'CES06', 'CES07', 'CES08', 'CES09']
-
-# Set up subplots
-fig, axs = plt.subplots(len(station_order), 1, figsize=(18, 24), sharex=True)
-
-for i, station in enumerate(station_order):
-    station_df = df[df['Station ID'] == station]
-    axs[i].scatter(station_df['Collection_Date'], station_df['Value'], s=10, alpha=0.7)
-    axs[i].set_title(f"{station} - Water Temperature")
-    axs[i].set_ylabel("Temp (°C)")
-    axs[i].set_xlabel("Collection Date")  # ✅ ADD X-AXIS LABEL TO EACH SUBPLOT
-    axs[i].grid(True)
-    axs[i].tick_params(axis='x', rotation=45)
-
-# Final layout and save
-plt.tight_layout()
-plt.savefig("AllStationsTemps_IndividualSubplots.png", dpi=300, bbox_inches='tight')
-plt.show()
-
-
-    </code></pre>
-    <!-- Image of Individual Station Subplots for Water Temp Time Series -->
-    <img src="AllStationsTemps_IndividualSubplots.png" alt="Image of Individual Station Subplots for Water Temp Time Series" style="max-width:100%; margin-top:1rem;">
     
-    <br>
     <br>
    
-<h5>Creating Combined Time Series Plot of Water Temperature from Each Station</h5>
-    <pre><code class="language-python">
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# Load combined dataset
-file_path = "WaterTemp_AllStations.csv"
-df = pd.read_csv(file_path)
-
-# Clean column names
-df.columns = df.columns.str.strip()
-
-# Parse Collection_Date
-df['Collection_Date'] = pd.to_datetime(df['Collection_Date'], errors='coerce')
-
-# Filter date range
-mask = (df['Collection_Date'] >= '2019-01-01') & (df['Collection_Date'] <= '2024-12-31')
-df = df[mask]
-
-# Desired station plotting order
-station_order = ['S77', 'S78', 'S79', 'CES02', 'CES03', 'CES04', 'CES05', 'CES06', 'CES07', 'CES08', 'CES09']
-
-# Plot
-plt.figure(figsize=(18, 8))
-
-for station in station_order:
-    station_df = df[df['Station ID'] == station]
-    plt.plot(station_df['Collection_Date'], station_df['Value'], label=station, linewidth=1.5)
-
-# Formatting
-plt.title("Water Temperature Time Series (2018–2024)")
-plt.xlabel("Collection Date")
-plt.ylabel("Temperature (°C)")
-plt.legend(title="Station ID", bbox_to_anchor=(1.05, 1), loc='upper left')
-plt.grid(True)
-plt.tight_layout()
-plt.xticks(rotation=45)
-plt.savefig("AllStationsTemps_CombinedPlot.png", dpi=300, bbox_inches='tight')
-plt.show()
-
-
-    </code></pre>
-    <!-- Image of Combined Time Series Plot of Water Temperature -->
-    <img src="AllStationsTemps_CombinedPlot.png" alt="Image of Combined Time Series Plot of Water Temperature" style="max-width:100%; margin-top:1rem;">
-    
-
-
   </main>
   <!-- ##################################################################################################################################################################### -->
   <!-- END OF THE MAIN BODY OF THE WEBPAGE -->
