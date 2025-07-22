@@ -780,6 +780,138 @@ Name: count, dtype: int64</p>
 Your EDA has been highly successful. The clear takeaway is that a classification model should rely heavily on <u>Discharge</u> and <u>Temperature</u> as predictive features. A model that uses all four variables will likely perform best, but it will learn that discharge is the most important factor in determining whether a bloom is likely to occur.</p>
 <br>
 <br>
+<h3 id="section7">6. Random Forest Model</h3>
+<h5>Recommendation of <b>Random Forest Classifier</b> for classification model</h5>
+<br>
+<p>Python script will:
+    <ol>
+        <li>Split the data into training and testing sets.</li>
+        <li>Train a Random Forest Classifier.</li>
+        <li>Evaluate its performance on the test set.</li>
+        <li>Analyze which features were most important for its predictions.</li>
+    </ol>
+</p><br>
+<pre><code class="language-python">
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+
+# --- Step 1: Load and Prepare Data ---
+file_path = 'S77_Merged_Data_3DayWindow.csv'
+
+try:
+    df = pd.read_csv(file_path)
+except FileNotFoundError:
+    print(f"FATAL ERROR: The file '{file_path}' was not found.")
+    raise
+
+# Prepare the final dataset for modeling
+df_model = df.dropna(subset=['Temperature_C', 'Discharge_cfs']).copy()
+bloom_threshold = 20.0
+df_model['Bloom'] = (df_model['Chlorophylla_Measurement'] >= bloom_threshold).astype(int)
+
+# Define our features (X) and target (y)
+features = ['ndci', 'fai', 'Temperature_C', 'Discharge_cfs']
+X = df_model[features]
+y = df_model['Bloom']
+
+print("Data prepared for modeling.")
+print(f"Features (X): {X.columns.tolist()}")
+print(f"Target (y): 'Bloom'")
+
+# --- Step 2: Split Data into Training and Testing Sets ---
+# We'll use 80% for training and 20% for testing
+# stratify=y ensures the proportion of blooms is the same in train and test sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+print(f"\nData split into {len(X_train)} training samples and {len(X_test)} testing samples.")
+
+
+# --- Step 3: Train the Random Forest Classifier ---
+# Initialize the model with some standard parameters
+# n_estimators is the number of "trees" in the forest
+# random_state ensures the results are reproducible
+model = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
+
+# Train the model on the training data
+model.fit(X_train, y_train)
+
+print("\nRandom Forest model trained successfully.")
+
+
+# --- Step 4: Evaluate the Model on Unseen Test Data ---
+# Make predictions on the test set
+y_pred = model.predict(X_test)
+
+# --- Accuracy ---
+accuracy = accuracy_score(y_test, y_pred)
+print(f"\n--- Model Evaluation ---")
+print(f"Overall Accuracy: {accuracy:.2%}")
+
+# --- Classification Report ---
+# This shows precision, recall, and F1-score for each class
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=['Non-Bloom', 'Bloom']))
+
+# --- Confusion Matrix ---
+# This shows the details of correct and incorrect predictions
+print("Confusion Matrix:")
+cm = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='g', cmap='Blues',
+            xticklabels=['Predicted Non-Bloom', 'Predicted Bloom'],
+            yticklabels=['Actual Non-Bloom', 'Actual Bloom'])
+plt.title('Confusion Matrix')
+plt.savefig('confusion_matrix.png', dpi=300)
+plt.show()
+
+
+# --- Step 5: Analyze Feature Importance ---
+# Check which features the model found most predictive
+importances = model.feature_importances_
+feature_importance_df = pd.DataFrame({
+    'Feature': features,
+    'Importance': importances
+}).sort_values(by='Importance', ascending=False)
+
+print("\n--- Feature Importance ---")
+print(feature_importance_df)
+
+# Plot feature importances
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Importance', y='Feature', data=feature_importance_df)
+plt.title('Feature Importances from Random Forest Model')
+plt.savefig('feature_importances.png', dpi=300)
+plt.show()
+    </code></pre>
+    <br>
+<h5>Output of Code:</h5>
+<p>Data prepared for modeling.<br>
+Features (X): ['ndci', 'fai', 'Temperature_C', 'Discharge_cfs']<br>
+Target (y): 'Bloom'<br><br>
+
+Data split into 67 training samples and 17 testing samples.<br><br>
+
+Random Forest model trained successfully.<br><br>
+
+--- Model Evaluation ---<br>
+Overall Accuracy: 76.47%<br><br>
+
+Classification Report:<br>
+              precision    recall  f1-score   support<br><br>
+
+   Non-Bloom       0.81      0.93      0.87        14<br>
+       Bloom       0.00      0.00      0.00         3<br>
+
+    accuracy                           0.76        17<br>
+   macro avg       0.41      0.46      0.43        17<br>
+weighted avg       0.67      0.76      0.71        17</p>
+
   </main>
   <!-- ##################################################################################################################################################################### -->
   <!-- END OF THE MAIN BODY OF THE WEBPAGE -->
@@ -795,6 +927,7 @@ Your EDA has been highly successful. The clear takeaway is that a classification
       <li class="nav-item"><a class="nav-link" href="#section4">3. Isolating and Analyzing S77 Discharge and Water Temperature Data</a></li>
       <li class="nav-item"><a class="nav-link" href="#section5">4. Merging Temperature and Discharge Data to Satellite and Chlorophyll-a Data</a></li>
       <li class="nav-item"><a class="nav-link" href="#section6">5. Exploratory Data Analysis Before Models</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section7">6. Random Forest Model</a></li>
     </ul>
   </aside>
 
