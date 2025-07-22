@@ -101,20 +101,137 @@
   <!-- START OF MAIN CONTENT -->
   <!-- ##################################################################################################################################################################### -->
   <main class="main-content">
-    <h1 id="section1">Data Collection - DBHYDRO</h1>
-    
+    <h1 id="section1">S77 Analysis</h1>
+    <br>
+    <h3>Focusing on Station with the Most Data Available First, to Observe Relationships Between Data</h3>
     <br>
     <br>
     
-    <h3 id="section2">1. Download Discharge and Water Temperature Data</h3>
-    <p>Discharge data for Caloosahatchee River stations available at the South Florida Water Management District's DBHYDRO website:</p>
-    <p>Link: <a href="https://my.sfwmd.gov/dbhydroplsql/show_dbkey_info.main_menu">DBHYDRO Browser Menu</a></p>
+    <h3 id="section2">1. Isolating S77 Station Data from Datasets</h3>
+    <p>Code below loads the master file of all stations and all available Sentinel-2 images, with NDCI and FAI calculated. This code isolates only the S77 station for analysis, and drops dates with no imagery for the station.</p>
     <br>
-    <p>Mean daily discharge data was downloaded for stations S77_TOT and S77_S from January 1, 2019 to December 31, 2024.</p>
-    <p>Water temperature was downloaded for the same time frame from stations S77, S78, S79, CES02, CEs03, CES04, CES05, CES06, CES07, CES08 and CES09.</p>
-    
-    <br></br>
-    <br></br>
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+import pandas as pd
+
+# Load the CSV file
+file_path = "Extracted_Indices_Final.csv"
+df = pd.read_csv(file_path)
+
+# Strip any extra whitespace in column names
+df.columns = df.columns.str.strip()
+
+# Filter for Station_Id == 'S77'
+df_s77 = df[df['Station_Id'] == 'S77']
+
+# Drop rows where 'ndci' or 'fai' are missing
+df_s77 = df_s77.dropna(subset=['ndci', 'fai'])
+
+# Preview the result
+print(df_s77.head())
+
+# Export to a new CSV
+output_path = "Extracted_Indices_S77.csv"
+df_s77.to_csv(output_path, index=False)
+    </code></pre>
+    <br>
+    <p> 
+        Results in 216 points of data where imagery was usable imagery was captured at the S77 station.
+    <br>
+        Code below focuses on the master water quality file, DBHYDRO_WQ_AllStations_Converted.csv, to isolate S77 Chloropyll-a data.
+    </p>
+    <br>
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+import pandas as pd
+
+# Load the CSV file
+file_path = "DBHydro_WQ_AllStations_Converted.csv"
+df = pd.read_csv(file_path)
+
+# Strip any extra whitespace in column names
+df.columns = df.columns.str.strip()
+
+# Filter for Station ID == 'S77'
+df_s77 = df[df['Station ID'] == 'S77']
+
+# Filter for only Chlorophyll-a samples
+df_s77 = df_s77[df_s77['Test Name'] == 'CHLOROPHYLL-A(LC)']
+
+# Preview the result
+print(df_s77.head())
+
+# Export to a new CSV
+output_path = "S77_Chlorophylla_Data.csv"
+df_s77.to_csv(output_path, index=False)
+print(df_s77.shape)
+    </code></pre>
+    <br>
+    <p>There are some sample codes that I am going to have to filter through, will use code to generate a list of the unique sample codes under 'Sample Type New'. Unique Values are SAMP, FCEB, EB, and RS. Will check DBHYDRO for what these mean.<br>
+    <b>SAMP = Sample</b><br>
+    <b>FCEB = Field Cleaned Equipment Blank</b><br>
+    <b>EB = Equipment Blank</b><br>
+    <b>RS = Replicate Sample</b><br>
+    Will filter out FCEB, EB, and RS.</p>
+    <br>
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+# Load the CSV file
+file_path = "S77_Chlorophylla_Data.csv"
+df = pd.read_csv(file_path)
+
+# Strip any extra whitespace in column names
+df.columns = df.columns.str.strip()
+
+# Filter for only Chlorophyll-a samples
+df_s77 = df_s77[df_s77['Sample Type New'] == 'SAMP']
+
+# Preview the result
+print(df_s77.head())
+
+# Export to a new CSV
+output_path = "S77_Chlorophylla_Data_SamplesOnly.csv"
+df_s77.to_csv(output_path, index=False)
+print(df_s77.shape)
+    </code></pre>
+    <br>
+    <p>New sample size is 275x47, filtered out 205 samples.<br>
+    <b>Visualizing s77 Chlorophyll-a Data:</b></p>
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load the filtered dataset
+file_path = "S77_Chlorophylla_Data_SamplesOnly.csv"
+df = pd.read_csv(file_path)
+
+# Strip any extra whitespace in column names
+df.columns = df.columns.str.strip()
+
+# Convert Collection_Date to datetime
+df['Collection_Date'] = pd.to_datetime(df['Collection_Date'], errors='coerce')
+
+# Drop rows with invalid or missing dates or values
+df = df.dropna(subset=['Collection_Date', 'Value'])
+
+# Sort by date
+df = df.sort_values('Collection_Date')
+
+# Plot
+plt.figure(figsize=(12, 6))
+plt.plot(df['Collection_Date'], df['Value'], marker='o', linestyle='-')
+plt.xlabel('Collection Date')
+plt.ylabel('Chlorophyll-a Concentration')
+plt.title('Chlorophyll-a Time Series at S77')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+    </code></pre>
+    <br>
+    <img src="S77Chlorophylla_TimeSeries.png" alt="S77 Chlorophyll-a time series" style="max-width:100%; margin-top:1rem;">
+    <br>
+
 
     <h3 id="section3">2. Inspect Discharge Data Frame</h3>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
