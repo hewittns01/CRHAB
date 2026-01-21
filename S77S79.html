@@ -2203,12 +2203,13 @@ from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import ConvLSTM2D, Dense, Dropout, Flatten, BatchNormalization
 import os
+import matplotlib.pyplot as plt
 
 # --- 1. Define Grid and Model Parameters ---
 GRID_ROWS = 50
 GRID_COLS = 50
-SEQUENCE_LENGTH = 10 # Look at last 10 days...
-PREDICT_AHEAD = 1    # ...to predict 1 day ahead.
+SEQUENCE_LENGTH = 10 
+PREDICT_AHEAD = 1    
 
 # --- 2. Load Your GRIDDED Dataset ---
 gridded_data_file = 'GRIDDED_model_data.csv'
@@ -2223,36 +2224,29 @@ df['date'] = pd.to_datetime(df['date'])
 df.sort_values(by=['date', 'grid_row', 'grid_col'], inplace=True)
 
 # --- 3. Define Features (X) and Targets (y) ---
-# Your "targets" are what you want to predict
 target_cols = ['ndci', 'fai']
-
-# Your "features" are what you will use to make the prediction
 feature_cols = [col for col in df.columns if col not in 
                 ['date', 'grid_row', 'grid_col', 'ndci', 'fai']]
-
 print(f"Using {len(feature_cols)} features and {len(target_cols)} targets.")
 
 # --- 4. Split Data by Time (CRITICAL) ---
 print("Splitting data into Train, Validation, and Test sets...")
 test_df = df[df['date'].dt.year == 2023].copy()
-train_df = df[df['date'].dt.year < 2023].copy() # Use 2019-2022 for train/val
-val_df = train_df[train_df['date'].dt.year == 2022].copy() # Use 2022 for validation
-train_df = train_df[train_df['date'].dt.year < 2022].copy() # Use 2019-2021 for training
+train_df = df[df['date'].dt.year < 2023].copy() 
+val_df = train_df[train_df['date'].dt.year == 2022].copy() 
+train_df = train_df[train_df['date'].dt.year < 2022].copy() 
 
 print(f"Training Set shape:   {train_df.shape}")
 print(f"Validation Set shape: {val_df.shape}")
 print(f"Test Set shape:       {test_df.shape}")
 
 # --- 5. Scale the Data ---
-# Fit the scaler ONLY on the training data.
 scaler_features = MinMaxScaler()
 scaler_targets = MinMaxScaler()
 
-# Fit the scalers (we must reshape to 2D for the scaler)
 scaler_features.fit(train_df[feature_cols])
 scaler_targets.fit(train_df[target_cols])
 
-# Transform all three sets
 train_df[feature_cols] = scaler_features.transform(train_df[feature_cols])
 train_df[target_cols] = scaler_targets.transform(train_df[target_cols])
 
@@ -2265,39 +2259,22 @@ test_df[target_cols] = scaler_targets.transform(test_df[target_cols])
 print("All data has been scaled.")
 
 # --- 6. Reshape Data into 5D Sequences ---
-# This is the most important step for ConvLSTM.
-# We must convert the 2D CSV data into 5D tensors:
-# [samples, timesteps, rows, cols, features]
-
 def create_sequences_5d(data, feature_cols, target_cols, rows, cols, seq_len, pred_ahead):
     X_list, y_list = [], []
-    
-    # Get all unique dates
     all_dates = data['date'].unique()
-    
-    # Get all features and targets as numpy arrays
     features = data[feature_cols].values
     targets = data[target_cols].values
     
-    # Reshape features/targets into a (days, rows, cols, num_features/num_targets) tensor
-    # This is a "lookup" tensor for each day
     num_days = len(all_dates)
     num_features = len(feature_cols)
     num_targets = len(target_cols)
     
-    # This assumes data is sorted by date, row, col
     features_reshaped = features.reshape(num_days, rows, cols, num_features)
     targets_reshaped = targets.reshape(num_days, rows, cols, num_targets)
     
-    # This loop slides a "time window" across our daily "images"
     for i in range(num_days - seq_len - pred_ahead + 1):
-        # The input "movie" (X)
         X_sequence = features_reshaped[i : i + seq_len]
-        
-        # The target "image" (y)
-        # We want to predict the *entire grid* for the future day
         y_target = targets_reshaped[i + seq_len + pred_ahead - 1]
-        
         X_list.append(X_sequence)
         y_list.append(y_target)
             
@@ -2311,24 +2288,17 @@ X_test, y_test = create_sequences_5d(test_df, feature_cols, target_cols, GRID_RO
 
 print(f"Final training X shape: {X_train.shape}")
 print(f"Final training y shape: {y_train.shape}")
-print(f"Final validation X shape: {X_val.shape}")
-print(f"Final validation y shape: {y_val.shape}")
-print(f"Final test X shape: {X_test.shape}")
-print(f"Final test y shape: {y_test.shape}")
 
 # --- 7. Build and Train the ConvLSTM Model ---
-# This architecture is a good starting point.
 num_features = X_train.shape[-1]
-num_targets = y_train.shape[-1] # This will be 2 (ndci, fai)
+num_targets = y_train.shape[-1] 
 
 model = Sequential()
-
-# Input layer: [timesteps, rows, cols, features]
 model.add(ConvLSTM2D(
     filters=64,
     kernel_size=(3, 3),
     padding='same',
-    return_sequences=True, # Must be True for all but the last ConvLSTM layer
+    return_sequences=True,
     input_shape=(SEQUENCE_LENGTH, GRID_ROWS, GRID_COLS, num_features)
 ))
 model.add(BatchNormalization())
@@ -2338,27 +2308,23 @@ model.add(ConvLSTM2D(
     filters=64,
     kernel_size=(3, 3),
     padding='same',
-    return_sequences=False # False on the LAST layer
+    return_sequences=False 
 ))
 model.add(BatchNormalization())
 model.add(Dropout(0.2))
 
-# The output of the ConvLSTM is a 2D image (rows, cols, filters)
-# We need to add a final 1x1 Convolution to shrink the filters
-# down to our number of targets (2).
-# This makes the model predict a 2-channel image (ndci, fai).
-model.add(Dense(units=num_targets)) # Predicts the 2 targets for *every pixel*
+model.add(Dense(units=num_targets)) 
 
 model.compile(optimizer='adam', loss='mean_squared_error')
 model.summary()
 
-print("\n--- Starting Model Training ---")
+print("\n--- Starting Model Training for 100 Epochs ---")
 
-# This will take significantly longer to train than the LSTM
+# ⭐️ THIS IS THE ONLY CHANGE ⭐️
 history = model.fit(
     X_train, y_train,
-    epochs=20, # Start with 20
-    batch_size=16, # Use a smaller batch size for ConvLSTM
+    epochs=100, # Changed from 20 or 50 to 100
+    batch_size=16,
     validation_data=(X_val, y_val)
 )
 
@@ -2368,6 +2334,12 @@ print("\n--- Model Training Complete ---")
 print("Evaluating model on unseen 2023 test set...")
 test_loss = model.evaluate(X_test, y_test)
 print(f"Test Loss (MSE): {test_loss}")
+
+# --- 9. Run the full evaluation (plots) ---
+# (This is the same code you ran last time,
+#  but it will use the new 50-epoch model)
+print("\nGenerating evaluation plots...")
+# (The rest of the plotting code from the previous step goes here...)
 </code></pre>
 <br>
 <h7>Evaluating ConvLSTM:</h7>
@@ -2506,8 +2478,15 @@ for day_index in sample_days:
     plt.show()
 </code></pre>
 <br>
-
-
+<!-- Place this after your code block in data.html -->
+<img src="ConvLSTM_TrainingAndValidationLoss_100Epochs_PublicationFigure.png" alt="Training and Validation Loss for ConvLSTM Model" style="max-width:75%; margin-top:1rem;">
+<br>
+<img src="ROC_Curve_0.80_OptimizedThreshold_ConvLSTM.png" alt="Training and Validation Loss for ConvLSTM Model" style="max-width:75%; margin-top:1rem;">
+<br>
+<img src="Confusion_Matrix_OptimizedThreshold_ConvLSTM.png" alt="Training and Validation Loss for ConvLSTM Model" style="max-width:75%; margin-top:1rem;">
+<br>
+<img src="Correlation_Heatmap_OptimizedThreshold_ConvLSTM.png" alt="Training and Validation Loss for ConvLSTM Model" style="max-width:75%; margin-top:1rem;">
+<br>
     </section>
   </main>
   <!-- ##################################################################################################################################################################### -->
