@@ -1326,6 +1326,395 @@ Key Predictive Features:
 
 <b>Conclusion:</b> This result definitively shows that predicting >40 µg/L blooms is a data-limited problem. The model's focus on temperature provides the strongest clue about the primary driver of these rare, high-intensity events.
 
+<h3 id="section9">8. LSTM Model</h3>
+<h5>LSTM Model recommendation to improve performance</h5>
+<br>
+<p>Need to extract NDCI and FAI for each year.<br>
+    Each year from 2019 to 2024 was taken modifying the start and end dates in the following code:
+</p><br>
+<pre><code class="language-python">
+import ee
+import geemap
+
+# --- Step 1: Authenticate and Initialize Earth Engine ---
+try:
+    geemap.ee_initialize()
+    print("Google Earth Engine has been successfully initialized.")
+except Exception as e:
+    print(f"Authentication or Initialization failed: {e}")
+    raise e
+
+# --- Step 2: Load Your Custom AOI Polygon from Assets ---
+try:
+    USER_AOI_PATH = 'projects/ee-hewittns01/assets/CaloosahatcheeRiver_and_CRE' 
+    aoi_polygon = ee.FeatureCollection(USER_AOI_PATH).geometry()
+    print(f"Successfully loaded custom AOI: {USER_AOI_PATH}")
+except Exception as e:
+    print(f"FATAL ERROR: Could not load your AOI from GEE Assets.")
+    print(f"Please check your asset path: {USER_AOI_PATH}")
+    raise e
+
+# --- Step 3: Create a 10m Water Mask (Same as before) ---
+try:
+    s2_composite = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+                      .filterBounds(aoi_polygon)
+                      .filterDate('2023-01-01', '2023-05-01')
+                      .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))
+                      .median()
+                      .clip(aoi_polygon))
+    
+    water_mask = s2_composite.normalizedDifference(['B3', 'B11']).gt(0)
+    water_only_image = water_mask.selfMask()
+    print("Successfully created 10m water mask from S2 composite.")
+except Exception as e:
+    print(f"Fatal Error: Could not create 10m water mask.")
+    raise e
+
+# --- Step 4: Generate 5,000 Water-Only Points (Same as before) ---
+try:
+    points_with_water_value = water_only_image.reduceRegions(
+        collection=ee.FeatureCollection.randomPoints(aoi_polygon, 20000, 42),
+        reducer=ee.Reducer.mean(),
+        scale=10
+    )
+    water_points = points_with_water_value.filter(ee.Filter.notNull(['mean']))
+    
+    sampling_points = water_points.limit(5000) \
+        .map(lambda f: f.set('point_id', f.id())) \
+        .select(['point_id'])
+
+    point_count = sampling_points.size().getInfo()
+    print(f"Successfully filtered to {point_count} final water-only points.")
+except Exception as e:
+    print(f"Fatal Error: Could not filter points.")
+    raise e
+
+# --- Step 5: Define GEE Functions and Parameters ---
+START_DATE = '2019-01-01' # Starting with 2019
+END_DATE = '2019-12-31'
+EXPORT_FOLDER = 'GEE_CSV_Exports'
+CSV_FILENAME = 'Extracted_NDCI_FAI_v16_DUMMY_FIX_2019' # New name
+
+def mask_s2_clouds(image):
+    scl = image.select('SCL')
+    good_quality = scl.eq(4).Or(scl.eq(5)).Or(scl.eq(6)).Or(scl.eq(7))
+    return image.updateMask(good_quality)
+
+def add_ndci(image):
+    return image.addBands(image.normalizedDifference(['B5', 'B4']).rename('ndci'))
+
+def add_fai(image):
+    rhos_prime = image.select('B4').add(image.select('B11').subtract(image.select('B4')).multiply(0.1873))
+    return image.addBands(image.select('B8').subtract(rhos_prime).rename('fai'))
+
+# --- Step 6: Create the REAL Image Collection ---
+s2_collection = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+                   .filterBounds(aoi_polygon)
+                   .filterDate(START_DATE, END_DATE) # Get real 2019 images
+                   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30)))
+
+# --- Step 7: ⭐️ THIS IS THE FIX ⭐️ ---
+# Set the dummy image date to ONE DAY BEFORE the start date.
+DUMMY_DATE = ee.Date(START_DATE).advance(-1, 'day')
+
+# Create a FAKE image with valid SCL and band values
+dummy_image = ee.Image.constant([665, 833, 1613, 6, 704]) \
+    .rename(['B4', 'B8', 'B11', 'SCL', 'B5']) \
+    .cast({'B4': 'int32', 'B8': 'int32', 'B11': 'int32', 'SCL': 'int32', 'B5': 'int32'}) \
+    .set('system:time_start', DUMMY_DATE.millis()) # Set its date to 2018-12-31
+
+# Merge the dummy image with the real collection and SORT
+# This guarantees the dummy image is first.
+combined_collection = s2_collection.merge(ee.ImageCollection([dummy_image])) \
+                                 .sort('system:time_start')
+
+# This is the fast function that will unmask
+def calculate_and_unmask(image):
+    masked_image = mask_s2_clouds(image)
+    image_with_indices = add_ndci(add_fai(masked_image))
+    return image_with_indices.select(['ndci', 'fai']).unmask(-9999)
+
+# Map over the COMBINED collection
+s2_with_indices = combined_collection.map(calculate_and_unmask)
+
+# --- Step 8: Define Extraction and Export (The Fast Way) ---
+def extract_point_values(image):
+    image_date = image.date().format('YYYY-MM-dd')
+    
+    def set_properties(feature_with_indices):
+        geom = feature_with_indices.geometry()
+        coords = geom.coordinates()
+
+        return ee.Feature(geom, {
+            'point_id': feature_with_indices.get('point_id'),
+            'date': image_date,
+            'longitude': coords.get(0),
+            'latitude': coords.get(1),
+            'ndci': feature_with_indices.get('ndci'), # Will be -9999 or real value
+            'fai': feature_with_indices.get('fai')    # Will be -9999 or real value
+        })
+
+    return image.reduceRegions(
+        collection=sampling_points,
+        reducer=ee.Reducer.mean(), 
+        scale=10
+    ).map(set_properties)
+
+extracted_features = s2_with_indices.map(extract_point_values).flatten()
+
+# --- Step 9: Export the Final Collection ---
+print(f"\n--- Initiating Final CSV Export: '{CSV_FILENAME}' ---")
+task = ee.batch.Export.table.toDrive(
+    collection=extracted_features,
+    description=CSV_FILENAME,
+    folder=EXPORT_FOLDER,
+    fileNamePrefix=CSV_FILENAME,
+    fileFormat='CSV'
+)
+task.start()
+
+print(f"Export task '{CSV_FILENAME}' has been started.")
+print(f"Once complete, the CSV will be in your Google Drive / {EXPORT_FOLDER} folder.")
+
+# --- Step 10 (Optional): Display Map to Verify Points ---
+Map = geemap.Map()
+Map.centerObject(aoi_polygon, 11)
+Map.addLayer(water_only_image, {'palette': 'blue'}, '10m Water Mask')
+Map.addLayer(sampling_points, {'color': 'red', 'pointSize': 1}, '5000 Final Water Points')
+Map
+    </code></pre>
+<br>
+<br>
+<p>Creating Lagged Features</p>
+<pre><code class="language-python">
+import pandas as pd
+
+# --- 1. Load Your Data ---
+df_discharge = pd.read_csv("C:/Users/Socce/Downloads/S79andS77_DailyAverageDischargeData_Cleaned.xlsx")
+df_gee = pd.read_csv('gee_export.csv') # This is your big new file
+
+# --- 2. Prepare Discharge Data ---
+# Convert date to datetime objects
+df_discharge['date'] = pd.to_datetime(df_discharge['date'])
+# Set date as the index (this makes shifting easy)
+df_discharge = df_discharge.set_index('date')
+# Rename the flow column for clarity
+df_discharge = df_discharge.rename(columns={'Flow_cfs': 'discharge'})
+
+# --- 3. Create Your Lagged Discharge Variables ---
+# This is the key to your hypothesis
+for lag_days in range(1, 22): # Let's test a 1 to 21 day lag
+    df_discharge[f'discharge_lag_{lag_days}d'] = df_discharge['discharge'].shift(lag_days)
+
+# --- 4. Prepare GEE Data ---
+df_gee['date'] = pd.to_datetime(df_gee['date'])
+# Also extract lat/lon from the .geo column GEE creates
+# (This part might need a little adjustment based on your CSV export)
+df_gee['longitude'] = df_gee['.geo'].apply(lambda x: eval(x)['coordinates'][0])
+df_gee['latitude'] = df_gee['.geo'].apply(lambda x: eval(x)['coordinates'][1])
+
+# --- 5. Merge Your Datasets ---
+# Join the satellite data with the lagged discharge data
+df_final = pd.merge(
+    df_gee,
+    df_discharge,
+    on='date',
+    how='left'
+)
+
+# Get all your discharge lag columns
+lag_cols = [col for col in df_final.columns if 'discharge_lag' in col]
+
+# Calculate the correlation matrix
+correlation_matrix = df_final[lag_cols + ['fai', 'ndci']].corr()
+
+# See which lag correlates best with FAI and NDCI
+print("FAI Correlations:")
+print(correlation_matrix['fai'].filter(like='discharge_lag').sort_values(ascending=False).head())
+
+print("\nNDCI Correlations:")
+print(correlation_matrix['ndci'].filter(like='discharge_lag').sort_values(ascending=False).head())
+    </code></pre>
+<br>
+<p> Data extraction complete!<br>
+    Went in and deleted the first date for each year, as it was from the previous year. Have to now deal with NaN, nulls, and -9999 in the dataset<br>
+    Python Code for Data Prep</p>
+<br>
+<p>Final step in data prep for model:</p>
+<pre><code class="language-python">
+import pandas as pd
+import numpy as np
+import glob
+import os
+
+# --- 1. Load All Your CSVs ---
+#
+# 🔴 IMPORTANT 🔴
+# Make sure all 5 of your CSV files (2019, 2020, 2021, 2022, 2023)
+# are in the same folder as this Jupyter notebook.
+#
+csv_folder_path = 'C:/Users/Socce/Downloads/HAB_NDCI_FAI_5kPoints' # This means "the current folder"
+
+# This pattern will find all 5 of your files
+file_pattern = "*_Extracted_NDCI_and_FAI_Long.csv"
+all_files = glob.glob(os.path.join(csv_folder_path, file_pattern))
+
+if not all_files:
+    print(f"--- ERROR: No files found! ---")
+    print(f"Could not find any files matching this pattern: '{file_pattern}'")
+    print(f"In this folder: {os.path.abspath(csv_folder_path)}")
+    print("\nPlease check that your CSV files are in the same folder as your notebook.")
+else:
+    print(f"Found {len(all_files)} files to load:")
+    print(all_files)
+
+    df_list = []
+    for f in all_files:
+        df_list.append(pd.read_csv(f))
+
+    df = pd.concat(df_list, ignore_index=True)
+    print("\nAll data loaded.")
+
+    # --- 2. Initial Cleaning ---
+    df['date'] = pd.to_datetime(df['date'])
+
+    # --- 3. Standardize Missing Values ---
+    df.replace(-9999, np.nan, inplace=True)
+    print("Standardized missing values to np.nan.")
+
+    # --- 4. Sort for Time-Series ---
+    df.sort_values(by=['point_id', 'date'], inplace=True)
+    print("Data sorted by point_id and date.")
+
+    # --- 5. Group and Interpolate (Fill Gaps) ---
+    # ⭐️ THIS IS THE FIX ⭐️
+    # We use .transform() instead of .apply() to keep the original index.
+    print("Starting temporal interpolation...")
+    df['ndci'] = df.groupby('point_id')['ndci'].transform(lambda x: x.interpolate(method='linear', limit_direction='both'))
+    df['fai'] = df.groupby('point_id')['fai'].transform(lambda x: x.interpolate(method='linear', limit_direction='both'))
+    print("Interpolation complete.")
+
+    # --- 6. Handle Remaining NaNs ---
+    # If a point's *entire* time-series was cloudy, it will still be NaN.
+    # We will fill these with 0.
+    df['ndci'].fillna(0, inplace=True)
+    df['fai'].fillna(0, inplace=True)
+    print("Filled any remaining NaNs with 0.")
+
+    # --- 7. Save Your Clean, Model-Ready File ---
+    clean_file_path = 'model_ready_data_all_years_CLEANED.csv'
+    df.to_csv(clean_file_path, index=False)
+
+    print(f"\n✅ Success! Your clean, model-ready data is saved to:")
+    print(clean_file_path)
+
+    # Show a sample of the cleaned data
+    print(df.head())
+    </code></pre>
+    <br>
+<p>Preparing discharge and new dataset for model:</p>
+<pre><code class="language-python">
+import pandas as pd
+import numpy as np
+
+# --- 1. Define File Names ---
+satellite_data_file = 'model_ready_data_all_years_CLEANED.csv'
+discharge_data_file = 'S79andS77_DailyAverageDischargeData_Cleaned.csv'
+
+# --- 2. Load and Prepare DISCHARGE Data ---
+try:
+    df_discharge = pd.read_csv(discharge_data_file)
+    print(f"Successfully loaded '{discharge_data_file}'")
+except FileNotFoundError:
+    print(f"ERROR: Cannot find file '{discharge_data_file}'")
+    print("Please make sure it's in the same folder as your notebook.")
+    raise # Stop the script
+
+# Keep only the columns we need
+df_discharge = df_discharge[['Station', 'Date', 'Data Value']]
+df_discharge.columns = ['station', 'date', 'discharge_cfs']
+
+# Convert date column to datetime objects
+# The format '%d-%b-%y' matches '1-Jan-19'
+df_discharge['date'] = pd.to_datetime(df_discharge['date'], format='%d-%b-%y')
+
+# --- 3. Pivot Discharge Data to "Wide" Format ---
+print("Pivoting discharge data...")
+df_discharge_wide = df_discharge.pivot(
+    index='date',
+    columns='station',
+    values='discharge_cfs'
+).reset_index()
+
+# Rename columns for clarity
+df_discharge_wide = df_discharge_wide.rename(
+    columns={'S77': 'S77_discharge_cfs', 'S79': 'S79_discharge_cfs'}
+)
+
+# Fill any NaNs created during the pivot (e.g., if S77 reported but S79 didn't)
+df_discharge_wide['S77_discharge_cfs'] = df_discharge_wide['S77_discharge_cfs'].fillna(0)
+df_discharge_wide['S79_discharge_cfs'] = df_discharge_wide['S79_discharge_cfs'].fillna(0)
+
+# --- 4. Create Lag Features ---
+# Set date as the index to make lagging easy
+df_discharge_wide = df_discharge_wide.set_index('date')
+
+print("Creating 21-day lag features for discharge...")
+for lag_days in range(1, 22): # 1 to 21 days
+    df_discharge_wide[f'S77_lag_{lag_days}d'] = df_discharge_wide['S77_discharge_cfs'].shift(lag_days)
+    df_discharge_wide[f'S79_lag_{lag_days}d'] = df_discharge_wide['S79_discharge_cfs'].shift(lag_days)
+
+# We can also add "delta" features (change from yesterday)
+df_discharge_wide['S77_delta_1d'] = df_discharge_wide['S77_discharge_cfs'].diff(1)
+df_discharge_wide['S79_delta_1d'] = df_discharge_wide['S79_discharge_cfs'].diff(1)
+
+print("Discharge features created.")
+
+# --- 5. Load SATELLITE Data ---
+try:
+    df_sat = pd.read_csv(satellite_data_file)
+    print(f"Successfully loaded '{satellite_data_file}'")
+except FileNotFoundError:
+    print(f"ERROR: Cannot find file '{satellite_data_file}'")
+    print("Please make sure your 'model_ready_data_all_years_CLEANED.csv' file is in the folder.")
+    raise # Stop the script
+
+# Convert date to datetime (it should be already, but good to double-check)
+df_sat['date'] = pd.to_datetime(df_sat['date'])
+print("Satellite data prepared.")
+
+# --- 6. Merge Satellite Data with Discharge Features ---
+df_final_model_data = pd.merge(
+    df_sat,
+    df_discharge_wide, # Use our new, wide, feature-rich table
+    on='date',
+    how='left'
+)
+
+# After merging, the first 21 days (and any other missing joins)
+# will have NaN for the lag features. We'll fill them with 0.
+df_final_model_data.fillna(0, inplace=True)
+print("Merge complete. All NaNs filled with 0.")
+
+# --- 7. Save Your FINAL Model-Ready File ---
+final_file_path = 'FINAL_MODEL_DATA_with_features.csv'
+df_final_model_data.to_csv(final_file_path, index=False)
+
+print(f"\n✅✅✅ CONGRATULATIONS! ✅✅✅")
+print("Your final, feature-engineered dataset is ready for modeling.")
+print(f"File saved to: {final_file_path}")
+
+# Show a sample of the final data
+print(df_final_model_data.head())
+
+# Show info to confirm all columns are numeric
+print("\n--- Final DataFrame Info ---")
+df_final_model_data.info()
+    </code></pre>
+    <br>
+    <br>
+<p>Model time - LSTM</p>
+    </section>
   </main>
   <!-- ##################################################################################################################################################################### -->
   <!-- END OF THE MAIN BODY OF THE WEBPAGE -->
@@ -1343,6 +1732,7 @@ Key Predictive Features:
       <li class="nav-item"><a class="nav-link" href="#section6">5. Exploratory Data Analysis Before Models</a></li>
       <li class="nav-item"><a class="nav-link" href="#section7">6. Random Forest Model</a></li>
       <li class="nav-item"><a class="nav-link" href="#section8">7. XGBoost Model</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section9">8. LSTM Model</a></li>
     </ul>
   </aside>
 
