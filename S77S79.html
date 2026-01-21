@@ -1996,16 +1996,17 @@ else:
 <br>
 <p>
 Gemini Analysis of LSTM:<br>
-1. Overall Diagnosis: The Model is Overfitting<br>
+<b>1. Overall Diagnosis: The Model is Overfitting</b><br>
 This is a classic and very common result. In short, your model has "memorized" the training data but has failed to generalize what it learned to the new, unseen data.
 <br>
 It's like a student who memorizes the answers to last year's test but fails the real exam because they never learned the concepts.
 <br>
 <br>
-2. Evidence from Your Plots<br>
+<b>2. Evidence from Your Plots</b><br>
 Here is how each plot proves this:<br>
 <br>
-Plot 1: Training & Validation Loss
+<br>
+<i>Plot 1: Training & Validation Loss</i>
 <br>
 What we see: The blue line (Training Loss) goes down and down. This is good; it means the model is memorizing the training data.
 <br>
@@ -2013,7 +2014,8 @@ The Problem: The orange line (Validation Loss) drops for one or two epochs and t
 <br>
 What this means: The gap between the blue and orange lines is the "overfitting gap." It shows that after the first couple of epochs, all the model's "learning" was just memorization that didn't help it predict new data.
 <br>
-Plot 2 & 3: Predicted vs. True (NDCI & FAI)
+<br>
+<i>Plot 2 & 3: Predicted vs. True (NDCI & FAI)</i>
 <br>
 What we see: The data points form a loose, circular "blob." They are not tight and linear along the red "Perfect Fit" line.
 <br>
@@ -2021,7 +2023,8 @@ The Problem: For any true value (x-axis), the model is predicting a huge range o
 <br>
 What this means: The model is not making accurate predictions. It has learned the average range of the data (e.g., "NDCI is usually between 0.0 and 0.4") but has no idea when it should be high or low.
 <br>
- Plot 4: Time-Series for a Single Point
+<br>
+<i>Plot 4: Time-Series for a Single Point</i>
 <br>
 This is the most important plot.
 <br>
@@ -2029,12 +2032,14 @@ What we see: The blue line (True NDCI) is dynamic, with sharp peaks and valleys.
 <br>
 What this means: The model has failed to learn the dynamics. It is not predicting the blooms (the peaks) or the clear water (the valleys). It has simply learned the average NDCI for that point and is predicting that average over and over.
 <br>
+<br>
 Why Did This Happen? (The "Blinkered Horse" Problem)<br>
 Your LSTM model is failing because it's "spatially blind."
 <br>
 Think of each of your 5,000 points as a "horse" in a race. Your LSTM is like a horse with blinkers on. It only knows its own history. It can't see the other 4,999 horses around it.
 <br>
 Your hypothesis is that a discharge event at S77 moves downstream as a plume. To predict a bloom at Point 500 (by the coast), the model needs to "see" the bloom that was at Point 200 (upstream) three days earlier. Your current LSTM cannot see this spatial relationship.
+<br>
 <br>
 The Next Step: The ConvLSTM<br>
 This "failure" is actually a fantastic and necessary step in your research. You have just scientifically proven that a simple temporal model (LSTM) is insufficient for this complex spatiotemporal problem.
