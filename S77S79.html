@@ -490,10 +490,221 @@ print(f'Only S77 df size: {df_s77.shape}')
 output_path = "S77_DischargeData.csv"
 df_s77.to_csv(output_path, index=False)
     </code></pre>
+
+    <br>
+    <p>Code to generate figure of discharge, temperature, and chlorophyll-a:</p>
+    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+    <pre><code class="language-python">
+    import pandas as pd
+import matplotlib.pyplot as plt
+import datetime # Import datetime for date objects
+import matplotlib.dates as mdates # Import for date locators
+
+plt.rcParams.update({
+    "font.size": 11,          # Base font size
+    "axes.titlesize": 14,     # Subplot titles
+    "axes.labelsize": 13,     # Y-axis and X-axis labels
+    "xtick.labelsize": 17,    # X tick labels
+    "ytick.labelsize": 13,    # Y tick labels
+    "legend.fontsize": 11,    # Legend
+})
+
+
+# --- Step 1: Define File Paths ---
+# I've updated these based on the files you uploaded.
+# You were loading the discharge file twice, so I've added the chlorophyll file.
+file_discharge = r"C:\Users\Socce\Downloads\S79andS77_DailyAverageDischargeData_Cleaned_for_Figure.csv"
+file_chloro = r"C:\Users\Socce\Downloads\S77_and_S79_Chlorophylla_Data_SamplesOnly_for_Figure.csv"
+file_temp = r"C:\Users\Socce\Downloads\S77andS79_WaterTemp_for_Figure.csv"
+
+# Define standard colors for consistency
+COLOR_77 = '#0072B2'  # A nice blue
+COLOR_79 = '#D55E00'  # A nice orange/red
+
+# --- Step 2: Load and Process Discharge Data ---
+try:
+    df_q = pd.read_csv(file_discharge)
+    df_q.columns = df_q.columns.str.strip()
+    # The date column is 'Date' in this file
+    df_q['Date'] = pd.to_datetime(df_q['Date'], errors='coerce')
+    df_q = df_q[df_q['Station'].isin(['S77', 'S79'])]
+    df_q['Value'] = pd.to_numeric(df_q['Value'], errors='coerce')
+    df_q = df_q.dropna(subset=['Date', 'Value'])
+    
+    # *** KEY CHANGE: Pivot data from "long" to "wide" format ***
+    # This creates a new DataFrame where the index is the Date,
+    # and 'S77' and 'S79' are columns.
+    df_q_wide = df_q.pivot_table(index='Date', columns='Station', values='Value')
+    # --- FIX: Explicitly sort the DataFrame by index (Date) ---
+    # This prevents the line plot from "zig-zagging" if data is out of order.
+    df_q_wide = df_q_wide.sort_index()
+except Exception as e:
+    print(f"Error processing Discharge file: {e}")
+    df_q_wide = pd.DataFrame() # Create empty dataframe to avoid plot errors
+
+# --- Step 3: Load and Process Temperature Data ---
+try:
+    df_t = pd.read_csv(file_temp)
+    df_t.columns = df_t.columns.str.strip()
+    # The date column is 'Collection_Date' in this file
+    df_t['Date'] = pd.to_datetime(df_t['Collection_Date'], errors='coerce')
+    # --- FIX: Normalize date to remove timestamp, allowing for daily averaging ---
+    df_t['Date'] = df_t['Date'].dt.normalize()
+    df_t = df_t[df_t['Station'].isin(['S77', 'S79'])]
+    # --- FIX: Use 'Sigfig Value' column, as 'Value' is often empty in this file ---
+    df_t['Value'] = pd.to_numeric(df_t['Sigfig Value'], errors='coerce')
+    df_t = df_t.dropna(subset=['Date', 'Value'])
+    
+    # Pivot data
+    df_t_wide = df_t.pivot_table(index='Date', columns='Station', values='Value')
+    # --- FIX: Explicitly sort the DataFrame by index (Date) ---
+    df_t_wide = df_t_wide.sort_index()
+except Exception as e:
+    print(f"Error processing Temperature file: {e}")
+    df_t_wide = pd.DataFrame()
+
+# --- Step 4: Load and Process Chlorophyll-a Data ---
+try:
+    df_c = pd.read_csv(file_chloro)
+    df_c.columns = df_c.columns.str.strip()
+    # The date column is 'Collection_Date' in this file
+    df_c['Date'] = pd.to_datetime(df_c['Collection_Date'], errors='coerce')
+    # --- FIX: Normalize date to remove timestamp, allowing for daily averaging ---
+    df_c['Date'] = df_c['Date'].dt.normalize()
+    df_c = df_c[df_c['Station'].isin(['S77', 'S79'])]
+    df_c['Value'] = pd.to_numeric(df_c['Value'], errors='coerce')
+    df_c = df_c.dropna(subset=['Date', 'Value'])
+    
+    # Pivot data
+    df_c_wide = df_c.pivot_table(index='Date', columns='Station', values='Value')
+    # --- FIX: Explicitly sort the DataFrame by index (Date) ---
+    # This prevents the line plot from "zig-zagging" if data is out of order.
+    df_c_wide = df_c_wide.sort_index()
+except Exception as e:
+    print(f"Error processing Chlorophyll file: {e}")
+    df_c_wide = pd.DataFrame()
+
+# -----------------------------
+# Step 5: Plot
+# -----------------------------
+plt.close("all")
+# Create 3 subplots stacked vertically, sharing the x-axis (Date)
+fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+# --- Add this block ---
+for ax in axes:
+    ax.tick_params(labelbottom=True)   # force showing x labels
+    ax.xaxis.set_tick_params(which="major", labelsize=9)
+# ------------------------
+ax_q, ax_t, ax_c = axes
+
+# Subplot labels (outside, top-right, not bold)
+ax_q.text(1.02, 1.02, "(a)", transform=ax_q.transAxes,
+          fontsize=11, va="bottom", ha="left")
+
+ax_t.text(1.02, 1.02, "(b)", transform=ax_t.transAxes,
+          fontsize=11, va="bottom", ha="left")
+
+ax_c.text(1.02, 1.02, "(c)", transform=ax_c.transAxes,
+          fontsize=11, va="bottom", ha="left")
+
+# --- Plot Discharge (Line) ---
+if "S77" in df_q_wide.columns:
+    # Now we plot against the index (which is the Date) and the 'S77' column
+    ax_q.plot(df_q_wide.index, df_q_wide["S77"], label="S-77", color=COLOR_77, linewidth=1.8)
+if "S79" in df_q_wide.columns:
+    ax_q.plot(df_q_wide.index, df_q_wide["S79"], label="S-79", color=COLOR_79, linewidth=1.8)
+ax_q.set_title("Daily Average Discharge")
+ax_q.set_ylabel("Discharge (cfs)") # Added units
+ax_q.legend(loc="upper left")
+ax_q.grid(True, alpha=0.3)
+
+# --- Plot Temperature (Line) ---
+if "S77" in df_t_wide.columns:
+    ax_t.plot(df_t_wide.index, df_t_wide["S77"], label="S-77", color=COLOR_77, linewidth=1.8)
+if "S79" in df_t_wide.columns:
+    ax_t.plot(df_t_wide.index, df_t_wide["S79"], label="S-79", color=COLOR_79, linewidth=1.8)
+ax_t.set_title("Water Temperature")
+ax_t.set_ylabel("Temperature (°C)")
+ax_t.legend(loc="upper left")
+ax_t.grid(True, alpha=0.3)
+ax_t.set_ylim(top=37.5)
+
+
+# --- Plot Chlorophyll-a (Line) ---
+# NOTE: We are plotting a line on the .dropna() data.
+# This connects only the valid data points and skips the
+# large 'NaN' gaps, which is what was causing the
+# zig-zag problem before.
+if "S77" in df_c_wide.columns:
+    # Drop NaNs, so we only plot real data for S77
+    s77_data = df_c_wide["S77"].dropna()
+    # --- CHANGE: Plotting as a simple line, matching the other plots. ---
+    ax_c.plot(s77_data.index, s77_data, label="S-77", color=COLOR_77, linestyle='-', linewidth=1.8)
+if "S79" in df_c_wide.columns:
+    # Drop NaNs, so we only plot real data for S79
+    s79_data = df_c_wide["S79"].dropna()
+    # --- CHANGE: Plotting as a simple line, matching the other plots. ---
+    ax_c.plot(s79_data.index, s79_data, label="S-79", color=COLOR_79, linestyle='-', linewidth=1.8)
+ax_c.set_title("Chlorophyll-a")
+ax_c.set_ylabel("Chl-a (µg/L)") # Added units
+ax_c.legend(loc="upper left")
+ax_c.grid(True, alpha=0.3)
+
+for ax in axes:
+    ax.tick_params(
+        axis='both',
+        which='major',
+        length=6,   # longer ticks
+        width=1.2,  # thicker ticks
+    )
+    ax.tick_params(
+        axis='both',
+        which='minor',
+        length=4,
+        width=1.0,
+    )
+
+# --- Ensure date tick labels resize correctly ---
+for ax in axes:
+    ax.tick_params(axis='x', which='major', labelsize=12, length=6, width=1.2)
+    ax.tick_params(axis='x', which='minor', labelsize=10, length=4, width=1.0)
+
+
+
+# --- Shared x-axis and export ---
+# The 'sharex=True' in subplots handles the x-axis alignment automatically.
+# We just need to set the label on the bottom-most plot.
+
+# Set the specific date range for the x-axis
+start_date = datetime.date(2019, 1, 1)
+end_date = datetime.date(2024, 12, 31)
+ax_c.set_xlim([start_date, end_date])
+
+# --- Add major (year) and minor (mid-year) ticks ---
+# Set major ticks to be at the start of each year
+ax_c.xaxis.set_major_locator(mdates.YearLocator())
+# Format major ticks to just show the year (e.g., "2020")
+ax_c.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+
+# Set minor ticks to be in July (month=7)
+ax_c.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=7))
+# No label for minor ticks
+ax_c.xaxis.set_minor_formatter(mdates.DateFormatter(''))
+
+
+ax_c.set_xlabel("Date")
+fig.tight_layout()
+
+fig.savefig("S77_S79_TimeSeries_PublishableFigure.png", dpi=300)
+print("Saved: S77_S79_TimeSeries.png and S77_S79_TimeSeries.png")
+
+# Also show the plot
+plt.show()
+    </code></pre>
     <br>
 <p>Visualize discharge, temperature, and Chlorophyll-a data:</p>
     <!-- Place this after your code block in data.html -->
-<img src="S77_S79_TimeSeries_PublishableFigure.png" alt="Discharge Time Series at S77" style="max-width:100%; margin-top:1rem;">
+<img src="S77_S79_TimeSeries_PublishableFigure.png" alt="Discharge, Temp, and Chlorophyll-a Time Series at S77 and S79" style="max-width:100%; margin-top:1rem;">
 <br>
 <br>
 
@@ -605,7 +816,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # --- Step 1: Load Your Final Merged Dataset ---
-file_path = 'S77_Merged_Data_3DayWindow.csv'
+# Updated file path to your new combined file
+file_path = 'S77_S79_Merged_Final_Corrected.csv'
 
 try:
     df = pd.read_csv(file_path)
@@ -617,93 +829,117 @@ except FileNotFoundError:
     print("Please ensure the merged CSV from the previous step is in the same directory.")
     raise
 
-# --- Step 2: Prepare Data for Analysis ---
-# For robust analysis, we'll drop rows that have missing environmental data
-df_analysis = df.dropna(subset=['Temperature_C', 'Discharge_cfs']).copy()
-print(f"Original data points: {len(df)}")
-print(f"Data points for analysis (after removing nulls): {len(df_analysis)}")
+# --- Get the unique stations from the 'Station_Id' column ---
+stations = df['Station_Id'].unique()
+print(f"Stations found in the dataset: {stations}")
+
+# --- Loop through each station and generate plots ---
+for station in stations:
+    print(f"\n--- Processing data for Station: {station} ---")
+
+    # --- Step 2: Prepare Data for Analysis (for the current station) ---
+    # Filter the dataframe for the current station
+    df_station = df[df['Station_Id'] == station].copy()
+
+    # For robust analysis, we'll drop rows that have missing environmental data
+    df_analysis = df_station.dropna(subset=['Temperature_C', 'Discharge_cfs']).copy()
+    print(f"Original data points for {station}: {len(df_station)}")
+    print(f"Data points for analysis (after removing nulls): {len(df_analysis)}")
+
+    if len(df_analysis) < 2:
+        print(f"Skipping plots for {station} due to insufficient data after cleaning.")
+        continue
+
+    # --- Step 3: Visualize and Save Time Series Data ---
+    print(f"Generating Time Series plots for {station}...")
+    fig, axes = plt.subplots(3, 1, figsize=(15, 12), sharex=True)
+    fig.suptitle(f'Time Series of Key Variables at Station {station}', fontsize=18)
+
+    # Plot 1: Chlorophyll-a
+    axes[0].plot(df_analysis['date'], df_analysis['Chlorophylla_Measurement'], color='green', marker='o', linestyle='-')
+    axes[0].set_ylabel('Chlorophyll-a (µg/L)')
+    axes[0].set_title('Chlorophyll-a Measurements')
+    axes[0].grid(True)
+
+    # Plot 2: Water Temperature
+    axes[1].plot(df_analysis['date'], df_analysis['Temperature_C'], color='red', marker='o', linestyle='-')
+    axes[1].set_ylabel('Temperature (°C)')
+    axes[1].set_title('Water Temperature')
+    axes[1].grid(True)
+
+    # Plot 3: Discharge
+    axes[2].plot(df_analysis['date'], df_analysis['Discharge_cfs'], color='blue', marker='o', linestyle='-')
+    axes[2].set_ylabel('Discharge (cfs)')
+    axes[2].set_title('River Discharge')
+    axes[2].set_xlabel('Date')
+    axes[2].grid(True)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    # --- MODIFIED LINE: Save the figure with a station-specific name ---
+    plt.savefig(f'{station}_time_series_plots.png', dpi=300)
+    plt.close() # Close the plot to free up memory
+    plt.show()
 
 
-# --- Step 3: Visualize and Save Time Series Data ---
-print("\nGenerating Time Series plots...")
-fig, axes = plt.subplots(3, 1, figsize=(15, 12), sharex=True)
-fig.suptitle('Time Series of Key Variables at Station S77', fontsize=18)
+    # --- Step 4: Visualize and Save Relationships with Scatter Plots ---
+    print(f"Generating Scatter plots for {station}...")
+    plt.figure(figsize=(16, 7))
 
-# Plot 1: Chlorophyll-a
-axes[0].plot(df_analysis['date'], df_analysis['Chlorophylla_Measurement'], color='green', marker='o', linestyle='-')
-axes[0].set_ylabel('Chlorophyll-a (µg/L)')
-axes[0].set_title('Chlorophyll-a Measurements')
-axes[0].grid(True)
+    # Scatter 1: Temperature vs. Chlorophyll-a
+    plt.subplot(1, 2, 1)
+    sns.scatterplot(data=df_analysis, x='Temperature_C', y='Chlorophylla_Measurement', alpha=0.7)
+    plt.title(f'{station}: Temperature vs. Chlorophyll-a')
+    plt.xlabel('Water Temperature (°C)')
+    plt.ylabel('Chlorophyll-a (µg/L)')
+    plt.grid(True)
 
-# Plot 2: Water Temperature
-axes[1].plot(df_analysis['date'], df_analysis['Temperature_C'], color='red', marker='o', linestyle='-')
-axes[1].set_ylabel('Temperature (°C)')
-axes[1].set_title('Water Temperature')
-axes[1].grid(True)
+    # Scatter 2: Discharge vs. Chlorophyll-a
+    plt.subplot(1, 2, 2)
+    sns.scatterplot(data=df_analysis, x='Discharge_cfs', y='Chlorophylla_Measurement', alpha=0.7)
+    plt.title(f'{station}: Discharge vs. Chlorophyll-a')
+    plt.xlabel('River Discharge (cfs)')
+    plt.ylabel('Chlorophyll-a (µg/L)')
+    plt.grid(True)
 
-# Plot 3: Discharge
-axes[2].plot(df_analysis['date'], df_analysis['Discharge_cfs'], color='blue', marker='o', linestyle='-')
-axes[2].set_ylabel('Discharge (cfs)')
-axes[2].set_title('River Discharge')
-axes[2].set_xlabel('Date')
-axes[2].grid(True)
+    plt.tight_layout()
+    plt.show()
+    # --- MODIFIED LINE: Save the figure with a station-specific name ---
+    plt.savefig(f'{station}_scatter_plots.png', dpi=300)
+    plt.close() # Close the plot
 
-plt.tight_layout(rect=[0, 0, 1, 0.96])
-# --- ADDED LINE: Save the figure ---
-plt.savefig('time_series_plots.png', dpi=300) # dpi=300 for high resolution
-plt.show()
+    # --- Step 5: Quantify and Save Relationships with a Correlation Matrix ---
+    print(f"Generating Correlation Matrix Heatmap for {station}...")
+    # Select only the key numerical columns for the correlation matrix
+    correlation_cols = ['Chlorophylla_Measurement', 'ndci', 'fai', 'Temperature_C', 'Discharge_cfs']
+    correlation_matrix = df_analysis[correlation_cols].corr()
 
+    # Create a heatmap to visualize the matrix
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=.5)
+    plt.title(f'Correlation Matrix of Key Variables at {station}')
+    # --- MODIFIED LINE: Save the figure with a station-specific name ---
+    plt.savefig(f'{station}_correlation_heatmap.png', dpi=300)
+    plt.show()
+    plt.close() # Close the plot
 
-# --- Step 4: Visualize and Save Relationships with Scatter Plots ---
-print("\nGenerating Scatter plots...")
-plt.figure(figsize=(16, 7))
-
-# Scatter 1: Temperature vs. Chlorophyll-a
-plt.subplot(1, 2, 1)
-sns.scatterplot(data=df_analysis, x='Temperature_C', y='Chlorophylla_Measurement', alpha=0.7)
-plt.title('Temperature vs. Chlorophyll-a')
-plt.xlabel('Water Temperature (°C)')
-plt.ylabel('Chlorophyll-a (µg/L)')
-plt.grid(True)
-
-# Scatter 2: Discharge vs. Chlorophyll-a
-plt.subplot(1, 2, 2)
-sns.scatterplot(data=df_analysis, x='Discharge_cfs', y='Chlorophylla_Measurement', alpha=0.7)
-plt.title('Discharge vs. Chlorophyll-a')
-plt.xlabel('River Discharge (cfs)')
-plt.ylabel('Chlorophyll-a (µg/L)')
-plt.grid(True)
-
-plt.tight_layout()
-# --- ADDED LINE: Save the figure ---
-plt.savefig('scatter_plots.png', dpi=300)
-plt.show()
-
-# --- Step 5: Quantify and Save Relationships with a Correlation Matrix ---
-print("\nGenerating Correlation Matrix Heatmap...")
-# Select only the key numerical columns for the correlation matrix
-correlation_cols = ['Chlorophylla_Measurement', 'ndci', 'fai', 'Temperature_C', 'Discharge_cfs']
-correlation_matrix = df_analysis[correlation_cols].corr()
-
-# Create a heatmap to visualize the matrix
-plt.figure(figsize=(10, 8))
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=.5)
-plt.title('Correlation Matrix of Key Variables')
-# --- ADDED LINE: Save the figure ---
-plt.savefig('correlation_heatmap.png', dpi=300)
-plt.show()
-
-print("\nExploratory Data Analysis Complete. Plots saved to your directory.")
+print("\nExploratory Data Analysis Complete. All plots saved to your directory.")
     </code></pre>
     <br>
 <!-- Place this after your code block in data.html -->
-<img src="Times_Series_Plots_S77_3DayWindow.png" alt="Chla, Temp, and Discharge Times Series Plot at S77" style="max-width:100%; margin-top:1rem;">
+<img src="S77_time_series_plots_.png" alt="S77 Time Series Plot" style="max-width:100%; margin-top:1rem;">
+<!-- Place this after your code block in data.html -->
+<img src="S79_time_series_plots_.png" alt="S79 Time Series Plot" style="max-width:100%; margin-top:1rem;">
 <br>
 <!-- Place this after your code block in data.html -->
-<img src="Scatter_Plots_S77_3DayWindow.png" alt="Scatter Plots of Temp vs. Chla and Dis vs. Chla at S77" style="max-width:100%; margin-top:1rem;">
+<img src="S77_scatter_plots.png" alt="EDA Scatteplots at S77" style="max-width:100%; margin-top:1rem;">
 <br>
 <!-- Place this after your code block in data.html -->
-<img src="Correlation_Heatmap_S77_3DayWindow.png" alt="Heatmap of Parameters at S77" style="max-width:100%; margin-top:1rem;">
+<img src="S79_scatter_plots.png" alt="EDA Scatteplots at S79" style="max-width:100%; margin-top:1rem;">
+<br>
+<!-- Place this after your code block in data.html -->
+<img src="S77_correlation_heatmap_.png" alt="Heatmap of Parameters at S77" style="max-width:100%; margin-top:1rem;">
+<!-- Place this after your code block in data.html -->
+<img src="S79_correlation_heatmap_.png" alt="Heatmap of Parameters at S79" style="max-width:100%; margin-top:1rem;">
 <br>
 <br>
 <p><b>Time Series Plots</b><br>
