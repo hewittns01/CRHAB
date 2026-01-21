@@ -1713,7 +1713,352 @@ df_final_model_data.info()
     </code></pre>
     <br>
     <br>
-<p>Model time - LSTM</p>
+<h7>Model time - LSTM</h7>
+<h8>Training the LSTM Model:</h8>
+<pre><code class="language-python">
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+import os
+
+# --- 1. Load Your FINAL Dataset ---
+final_data_file = 'FINAL_MODEL_DATA_with_features.csv'
+try:
+    df = pd.read_csv(final_data_file)
+    print(f"Successfully loaded '{final_data_file}'")
+except FileNotFoundError:
+    print(f"ERROR: Cannot find file '{final_data_file}'")
+    raise
+
+df['date'] = pd.to_datetime(df['date'])
+df.sort_values(by=['point_id', 'date'], inplace=True)
+
+# --- 2. Define Features (X) and Targets (y) ---
+# Your "targets" are what you want to predict
+target_cols = ['ndci', 'fai']
+
+# Your "features" are what you will use to make the prediction
+# We exclude all non-numeric or identifier columns
+feature_cols = [col for col in df.columns if col not in 
+                ['system:index', 'date', 'point_id', '.geo', 'ndci', 'fai']]
+
+# Let's add day_of_year as a feature
+df['day_of_year'] = df['date'].dt.dayofyear
+if 'day_of_year' not in feature_cols:
+    feature_cols.append('day_of_year')
+
+print(f"Using {len(feature_cols)} features and {len(target_cols)} targets.")
+
+# --- 3. Split Data by Time (CRITICAL) ---
+print("Splitting data into Train, Validation, and Test sets...")
+# We will use 2023 as our final, unseen "Test Set".
+# We will use 2019-2022 as our "Training Set".
+# We will hold out a piece of the training set (e.g., 20% of points)
+# for "Validation" during training.
+
+test_df = df[df['date'].dt.year == 2023].copy()
+train_val_df = df[df['date'].dt.year < 2023].copy()
+
+# Now, we split the train_val_df by point_id to create a validation set.
+all_point_ids = train_val_df['point_id'].unique()
+np.random.shuffle(all_point_ids) # Shuffle the point IDs
+
+val_percent = 0.20
+split_index = int(len(all_point_ids) * (1 - val_percent))
+
+train_point_ids = all_point_ids[:split_index]
+val_point_ids = all_point_ids[split_index:]
+
+train_df = train_val_df[train_val_df['point_id'].isin(train_point_ids)]
+val_df = train_val_df[train_val_df['point_id'].isin(val_point_ids)]
+
+print(f"Training Set shape:   {train_df.shape}")
+print(f"Validation Set shape: {val_df.shape}")
+print(f"Test Set shape:       {test_df.shape}")
+
+# --- 4. Scale the Data ---
+# We fit the scaler ONLY on the training data.
+scaler_features = MinMaxScaler()
+scaler_targets = MinMaxScaler()
+
+# Fit the scalers
+scaler_features.fit(train_df[feature_cols])
+scaler_targets.fit(train_df[target_cols])
+
+# Transform all three sets
+train_df[feature_cols] = scaler_features.transform(train_df[feature_cols])
+train_df[target_cols] = scaler_targets.transform(train_df[target_cols])
+
+val_df[feature_cols] = scaler_features.transform(val_df[feature_cols])
+val_df[target_cols] = scaler_targets.transform(val_df[target_cols])
+
+test_df[feature_cols] = scaler_features.transform(test_df[feature_cols])
+test_df[target_cols] = scaler_targets.transform(test_df[target_cols])
+
+print("All data has been scaled.")
+
+# --- 5. Reshape Data into Sequences ---
+SEQUENCE_LENGTH = 10 # Look at last 10 days...
+PREDICT_AHEAD = 1    # ...to predict 1 day ahead.
+
+def create_sequences(data, feature_cols, target_cols, sequence_length, predict_ahead):
+    X_list, y_list = [], []
+    # Group by point so sequences don't cross over between points
+    for point_id, group in data.groupby('point_id'):
+        features = group[feature_cols].values
+        targets = group[target_cols].values
+        
+        for i in range(len(features) - sequence_length - predict_ahead + 1):
+            # The input sequence (X)
+            X_sequence = features[i : i + sequence_length]
+            # The target (y)
+            y_target = targets[i + sequence_length + predict_ahead - 1]
+            
+            X_list.append(X_sequence)
+            y_list.append(y_target)
+            
+    return np.array(X_list), np.array(y_list)
+
+print(f"Creating sequences with {SEQUENCE_LENGTH} timesteps...")
+
+X_train, y_train = create_sequences(train_df, feature_cols, target_cols, SEQUENCE_LENGTH, PREDICT_AHEAD)
+X_val, y_val = create_sequences(val_df, feature_cols, target_cols, SEQUENCE_LENGTH, PREDICT_AHEAD)
+X_test, y_test = create_sequences(test_df, feature_cols, target_cols, SEQUENCE_LENGTH, PREDICT_AHEAD)
+
+print(f"Final training X shape: {X_train.shape}")
+print(f"Final training y shape: {y_train.shape}")
+print(f"Final validation X shape: {X_val.shape}")
+print(f"Final validation y shape: {y_val.shape}")
+print(f"Final test X shape: {X_test.shape}")
+print(f"Final test y shape: {y_test.shape}")
+
+
+# --- 6. Build and Train the LSTM Model ---
+# We can now define our model
+num_features = X_train.shape[2]
+num_targets = y_train.shape[1]
+
+model = Sequential()
+model.add(LSTM(
+    units=64, 
+    input_shape=(SEQUENCE_LENGTH, num_features),
+    return_sequences=True # True for stacking, False for last layer
+))
+model.add(Dropout(0.2))
+model.add(LSTM(units=32, return_sequences=False))
+model.add(Dropout(0.2))
+model.add(Dense(units=num_targets)) # Output layer: 2 neurons (ndci, fai)
+
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.summary()
+
+print("\n--- Starting Model Training ---")
+
+# We can now train the model
+# Use a smaller batch_size if your computer runs out of memory
+history = model.fit(
+    X_train, y_train,
+    epochs=20, # Start with 20, can increase later
+    batch_size=256,
+    validation_data=(X_val, y_val)
+)
+
+print("\n--- Model Training Complete ---")
+
+# --- 7. Evaluate on Test Set ---
+print("Evaluating model on unseen 2023 test set...")
+test_loss = model.evaluate(X_test, y_test)
+print(f"Test Loss (MSE): {test_loss}")
+    </code></pre>
+<p>Testing the LSTM Model:</p>
+<pre><code class="language-python"></code>
+    import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# --- 1. Evaluate Model on Test Set ---
+print("Evaluating model on unseen 2023 test set...")
+test_loss = model.evaluate(X_test, y_test)
+print(f"Test Loss (Scaled MSE): {test_loss}")
+
+# --- 2. Make Predictions ---
+print("\nGenerating predictions on the test set...")
+y_pred_scaled = model.predict(X_test)
+
+# --- 3. Un-scale the Data for Interpretation ---
+# This is the most important step. We need to convert the
+# scaled 0-1 values back into their original NDCI/FAI units.
+
+# We use the 'scaler_targets' we created in the previous script
+y_pred_unscaled = scaler_targets.inverse_transform(y_pred_scaled)
+y_test_unscaled = scaler_targets.inverse_transform(y_test)
+
+# --- 4. Plot Training & Validation Loss ---
+# This shows if the model was "overfitting"
+print("\nPlotting training history...")
+plt.figure(figsize=(10, 5))
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('Model Training & Validation Loss Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss (MSE)')
+plt.legend()
+plt.savefig(f'LSTM_Training_and_Validation_Loss.png', dpi=300)
+plt.show()
+
+# --- 5. Plot Predicted vs. True Values (The "Money Plot") ---
+# This is the best way to see how good the model is.
+# A perfect model would have all points on the red 1:1 line.
+
+# Plot for NDCI
+print("\nPlotting NDCI: Predicted vs. True")
+plt.figure(figsize=(10, 10))
+plt.scatter(y_test_unscaled[:, 0], y_pred_unscaled[:, 0], alpha=0.1) # alpha for transparency
+plt.plot([min(y_test_unscaled[:, 0]), max(y_test_unscaled[:, 0])], 
+         [min(y_test_unscaled[:, 0]), max(y_test_unscaled[:, 0])], 
+         color='red', lw=2, label='1:1 Line (Perfect Fit)')
+plt.title('NDCI: Predicted vs. True Values (2023 Test Set)')
+plt.xlabel('True NDCI')
+plt.ylabel('Predicted NDCI')
+plt.legend()
+plt.grid(True)
+plt.savefig(f'LSTM_NDCI_Plot.png', dpi=300)
+plt.show()
+
+# Plot for FAI
+print("\nPlotting FAI: Predicted vs. True")
+plt.figure(figsize=(10, 10))
+plt.scatter(y_test_unscaled[:, 1], y_pred_unscaled[:, 1], alpha=0.1)
+plt.plot([min(y_test_unscaled[:, 1]), max(y_test_unscaled[:, 1])], 
+         [min(y_test_unscaled[:, 1]), max(y_test_unscaled[:, 1])], 
+         color='red', lw=2, label='1:1 Line (Perfect Fit)')
+plt.title('FAI: Predicted vs. True Values (2023 Test Set)')
+plt.xlabel('True FAI')
+plt.ylabel('Predicted FAI')
+plt.legend()
+plt.grid(True)
+plt.savefig(f'LSTM_FAI_Plot.png', dpi=300)
+plt.show()
+
+# --- 6. (Optional) Look at a Single Point's Time-Series ---
+# This helps visualize how the model performs day-to-day
+print("\nPlotting time-series for a single point...")
+
+# Get all data for a single point_id from the test set
+# (You can change this ID to look at different points)
+sample_point_id = test_df['point_id'].unique()[0] 
+df_sample = test_df[test_df['point_id'] == sample_point_id]
+
+# Create sequences for just this point
+X_sample, y_sample_true_scaled = create_sequences(
+    df_sample, 
+    feature_cols, 
+    target_cols, 
+    SEQUENCE_LENGTH, 
+    PREDICT_AHEAD
+)
+
+if X_sample.shape[0] > 0:
+    # Make predictions and un-scale
+    y_sample_pred_scaled = model.predict(X_sample)
+    y_sample_pred_unscaled = scaler_targets.inverse_transform(y_sample_pred_scaled)
+    y_sample_true_unscaled = scaler_targets.inverse_transform(y_sample_true_scaled)
+    
+    # Get the dates for plotting
+    plot_dates = df_sample['date'].values[SEQUENCE_LENGTH + PREDICT_AHEAD - 1:]
+    
+    plt.figure(figsize=(15, 6))
+    plt.plot(plot_dates, y_sample_true_unscaled[:, 0], label='True NDCI', color='blue')
+    plt.plot(plot_dates, y_sample_pred_unscaled[:, 0], label='Predicted NDCI', color='orange', linestyle='--')
+    plt.title(f'Time-Series Prediction for Point ID: {sample_point_id}')
+    plt.xlabel('Date')
+    plt.ylabel('NDCI')
+    plt.legend()
+    plt.savefig(f'LSTM_True_vs_Predicted_NDCI.png', dpi=300)
+    plt.show()
+    plt.savefig(f'LSTM_True_vs_Predicted_NDCI.png', dpi=300)
+else:
+    print(f"Not enough data for point {sample_point_id} to plot time-series.")
+    </code></pre>
+
+<h7>Output of Code:</h7>
+<br>
+<!-- Place this after your code block in data.html -->
+<img src="LSTM_TrainingAndValidationLoss_20Epochs_PublicationFigure.png" alt="Training and Validation Loss for LSTM Model" style="max-width:75%; margin-top:1rem;">
+<br>
+<img src="LSTM_NDCI_Plot.png" alt="Training and Validation Loss for LSTM Model" style="max-width:75%; margin-top:1rem;">
+<br>
+<img src="LSTM_FAI_Plot.png" alt="Training and Validation Loss for LSTM Model" style="max-width:75%; margin-top:1rem;">
+<br>
+<img src="LSTM_True_vs_Predicted_NDCI.png" alt="Training and Validation Loss for LSTM Model" style="max-width:75%; margin-top:1rem;">
+
+<p>
+     Gemini Analysis of LSTM:
+
+1. Overall Diagnosis: The Model is Overfitting<br>
+This is a classic and very common result. In short, your model has "memorized" the training data but has failed to generalize what it learned to the new, unseen data.
+<br>
+It's like a student who memorizes the answers to last year's test but fails the real exam because they never learned the concepts.
+<br>
+<br>
+2. Evidence from Your Plots<br>
+Here is how each plot proves this:<br>
+<br>
+Plot 1: Training & Validation Loss
+<br>
+What we see: The blue line (Training Loss) goes down and down. This is good; it means the model is memorizing the training data.
+<br>
+The Problem: The orange line (Validation Loss) drops for one or two epochs and then flatlines.
+<br>
+What this means: The gap between the blue and orange lines is the "overfitting gap." It shows that after the first couple of epochs, all the model's "learning" was just memorization that didn't help it predict new data.
+<br>
+Plot 2 & 3: Predicted vs. True (NDCI & FAI)
+<br>
+What we see: The data points form a loose, circular "blob." They are not tight and linear along the red "Perfect Fit" line.
+<br>
+The Problem: For any true value (x-axis), the model is predicting a huge range of wrong values (y-axis). The FAI plot is even worse, showing almost no relationship at all.
+<br>
+What this means: The model is not making accurate predictions. It has learned the average range of the data (e.g., "NDCI is usually between 0.0 and 0.4") but has no idea when it should be high or low.
+<br>
+ Plot 4: Time-Series for a Single Point
+<br>
+This is the most important plot.
+<br>
+What we see: The blue line (True NDCI) is dynamic, with sharp peaks and valleys. The orange line (Predicted NDCI) is almost a flat line.
+<br>
+What this means: The model has failed to learn the dynamics. It is not predicting the blooms (the peaks) or the clear water (the valleys). It has simply learned the average NDCI for that point and is predicting that average over and over.
+<br>
+Why Did This Happen? (The "Blinkered Horse" Problem)<br>
+Your LSTM model is failing because it's "spatially blind."
+<br>
+Think of each of your 5,000 points as a "horse" in a race. Your LSTM is like a horse with blinkers on. It only knows its own history. It can't see the other 4,999 horses around it.
+<br>
+Your hypothesis is that a discharge event at S77 moves downstream as a plume. To predict a bloom at Point 500 (by the coast), the model needs to "see" the bloom that was at Point 200 (upstream) three days earlier. Your current LSTM cannot see this spatial relationship.
+<br>
+The Next Step: The ConvLSTM<br>
+This "failure" is actually a fantastic and necessary step in your research. You have just scientifically proven that a simple temporal model (LSTM) is insufficient for this complex spatiotemporal problem.
+<br>
+This perfectly justifies the need for the more powerful model you originally asked about: the ConvLSTM (Convolutional LSTM).
+<br>
+An LSTM sees time.
+<br>
+A CNN (Convolutional Neural Network) sees space (like in an image).
+<br>
+A ConvLSTM sees both space and time simultaneously.
+<br>
+The ConvLSTM will look at the entire map of your estuary as a "movie" and learn how the plumes move and evolve.
+<br>
+Your New Action Plan<br>
+To feed the ConvLSTM, we must convert your 5,000 scattered points into "images."
+<br>
+Grid the Data (Rasterize): We will lay a 2D grid (e.g., 50x50 cells) over your AOI.
+<br>
+Average Points: For each day, we'll average all the points that fall inside each grid cell. This turns your "point cloud" into a 2D "image" of the bloom for that day.
+<br>
+Reshape for ConvLSTM: We will then stack these "images" into a 5D tensor that the ConvLSTM needs: [samples, timesteps, rows, cols, features].
+</p>
     </section>
   </main>
   <!-- ##################################################################################################################################################################### -->
