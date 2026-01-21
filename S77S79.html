@@ -2093,6 +2093,420 @@ by figuring out which grid cell each of your 5,000 points falls into.
 This is the key. We will groupby(['date', 'grid_row', 'grid_col']) and calculate the mean() of all values. 
 This combines the multiple points that might be in one grid cell into a single "pixel" value for that day. 
 </p><br>
+<br>
+<h7>Creating Grid Needed for the ConvLSTM Model:</h7>
+<pre><code class="language-python">
+    import pandas as pd
+import numpy as np
+import os
+
+# --- 1. Define Grid Resolution ---
+# You can change this. A larger number gives a finer grid but
+# may result in more empty cells. 50x50 is a good start.
+GRID_ROWS = 50
+GRID_COLS = 50
+
+# --- 2. Load Your Final Feature Data ---
+final_data_file = 'FINAL_MODEL_DATA_with_features.csv'
+try:
+    df = pd.read_csv(final_data_file)
+    print(f"Successfully loaded '{final_data_file}'")
+except FileNotFoundError:
+    print(f"ERROR: Cannot find file '{final_data_file}'")
+    raise
+
+df['date'] = pd.to_datetime(df['date'])
+print(f"Loaded {len(df)} rows.")
+
+# --- 3. Define Grid Boundaries ---
+# Find the min/max latitude and longitude to create our "box"
+min_lon, max_lon = df['longitude'].min(), df['longitude'].max()
+min_lat, max_lat = df['latitude'].min(), df['latitude'].max()
+
+print(f"Grid bounds defined:")
+print(f"Lon: {min_lon} to {max_lon}")
+print(f"Lat: {min_lat} to {max_lat}")
+
+# --- 4. Bin Points into Grid Cells ---
+# Create the "bins" or edges for our grid
+lon_bins = np.linspace(min_lon, max_lon, GRID_COLS + 1)
+lat_bins = np.linspace(min_lat, max_lat, GRID_ROWS + 1)
+
+# Use pd.cut to assign each point to a grid "row" and "col"
+# Note: We use labels=False to get integer indices (0, 1, 2...)
+df['grid_col'] = pd.cut(df['longitude'], bins=lon_bins, labels=False, include_lowest=True)
+df['grid_row'] = pd.cut(df['latitude'], bins=lat_bins, labels=False, include_lowest=True)
+
+# Handle any points that might fall exactly on the edge (rare)
+df.dropna(subset=['grid_col', 'grid_row'], inplace=True)
+df['grid_col'] = df['grid_col'].astype(int)
+df['grid_row'] = df['grid_row'].astype(int)
+
+print("All 5,000 points have been assigned to grid cells.")
+
+# --- 5. Aggregate Data by Grid Cell ---
+# This is the key "rasterizing" step.
+# We group by date AND our new grid cells, then average all features.
+print("Aggregating points by date and grid cell...")
+
+# Get all columns we need to aggregate
+# This is all features + all targets
+agg_cols = [col for col in df.columns if col not in 
+            ['system:index', 'point_id', '.geo', 'latitude', 'longitude']]
+
+# Group and aggregate
+# .reset_index() moves 'date', 'grid_row', 'grid_col' back to columns
+df_grid = df[agg_cols].groupby(['date', 'grid_row', 'grid_col']).mean().reset_index()
+
+print("Aggregation complete.")
+
+# --- 6. Fill in the Gaps (Create a Dense Tensor) ---
+# The data is now "sparse" (only cells with points have data).
+# We need to create a "dense" grid by adding all the empty cells (like open water)
+# and filling them with 0.
+
+# Create a complete index of ALL possible grid cells
+all_rows = np.arange(0, GRID_ROWS)
+all_cols = np.arange(0, GRID_COLS)
+all_dates = df['date'].unique()
+
+# Create the full "template" of all date/row/col combinations
+full_index = pd.MultiIndex.from_product(
+    [all_dates, all_rows, all_cols],
+    names=['date', 'grid_row', 'grid_col']
+)
+
+# Set the index on our gridded data
+df_grid = df_grid.set_index(['date', 'grid_row', 'grid_col'])
+
+# Reindex our data to the full template, filling in gaps with 0
+df_gridded_final = df_grid.reindex(full_index, fill_value=0).reset_index()
+
+print("Gaps filled. Grid is now 'dense'.")
+
+# --- 7. Save the Gridded Data ---
+gridded_file_path = 'GRIDDED_model_data.csv'
+df_gridded_final.to_csv(gridded_file_path, index=False)
+
+print(f"\n✅ Success! Your gridded, ConvLSTM-ready data is saved to:")
+print(gridded_file_path)
+
+# Show a sample of the new gridded data
+print(df_gridded_final.head())
+</code></pre>
+<br>
+<h7>Training ConvLSTM:</h7>
+<pre><code class="language-python">
+    import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import ConvLSTM2D, Dense, Dropout, Flatten, BatchNormalization
+import os
+
+# --- 1. Define Grid and Model Parameters ---
+GRID_ROWS = 50
+GRID_COLS = 50
+SEQUENCE_LENGTH = 10 # Look at last 10 days...
+PREDICT_AHEAD = 1    # ...to predict 1 day ahead.
+
+# --- 2. Load Your GRIDDED Dataset ---
+gridded_data_file = 'GRIDDED_model_data.csv'
+try:
+    df = pd.read_csv(gridded_data_file)
+    print(f"Successfully loaded '{gridded_data_file}'")
+except FileNotFoundError:
+    print(f"ERROR: Cannot find file '{gridded_data_file}'")
+    raise
+
+df['date'] = pd.to_datetime(df['date'])
+df.sort_values(by=['date', 'grid_row', 'grid_col'], inplace=True)
+
+# --- 3. Define Features (X) and Targets (y) ---
+# Your "targets" are what you want to predict
+target_cols = ['ndci', 'fai']
+
+# Your "features" are what you will use to make the prediction
+feature_cols = [col for col in df.columns if col not in 
+                ['date', 'grid_row', 'grid_col', 'ndci', 'fai']]
+
+print(f"Using {len(feature_cols)} features and {len(target_cols)} targets.")
+
+# --- 4. Split Data by Time (CRITICAL) ---
+print("Splitting data into Train, Validation, and Test sets...")
+test_df = df[df['date'].dt.year == 2023].copy()
+train_df = df[df['date'].dt.year < 2023].copy() # Use 2019-2022 for train/val
+val_df = train_df[train_df['date'].dt.year == 2022].copy() # Use 2022 for validation
+train_df = train_df[train_df['date'].dt.year < 2022].copy() # Use 2019-2021 for training
+
+print(f"Training Set shape:   {train_df.shape}")
+print(f"Validation Set shape: {val_df.shape}")
+print(f"Test Set shape:       {test_df.shape}")
+
+# --- 5. Scale the Data ---
+# Fit the scaler ONLY on the training data.
+scaler_features = MinMaxScaler()
+scaler_targets = MinMaxScaler()
+
+# Fit the scalers (we must reshape to 2D for the scaler)
+scaler_features.fit(train_df[feature_cols])
+scaler_targets.fit(train_df[target_cols])
+
+# Transform all three sets
+train_df[feature_cols] = scaler_features.transform(train_df[feature_cols])
+train_df[target_cols] = scaler_targets.transform(train_df[target_cols])
+
+val_df[feature_cols] = scaler_features.transform(val_df[feature_cols])
+val_df[target_cols] = scaler_targets.transform(val_df[target_cols])
+
+test_df[feature_cols] = scaler_features.transform(test_df[feature_cols])
+test_df[target_cols] = scaler_targets.transform(test_df[target_cols])
+
+print("All data has been scaled.")
+
+# --- 6. Reshape Data into 5D Sequences ---
+# This is the most important step for ConvLSTM.
+# We must convert the 2D CSV data into 5D tensors:
+# [samples, timesteps, rows, cols, features]
+
+def create_sequences_5d(data, feature_cols, target_cols, rows, cols, seq_len, pred_ahead):
+    X_list, y_list = [], []
+    
+    # Get all unique dates
+    all_dates = data['date'].unique()
+    
+    # Get all features and targets as numpy arrays
+    features = data[feature_cols].values
+    targets = data[target_cols].values
+    
+    # Reshape features/targets into a (days, rows, cols, num_features/num_targets) tensor
+    # This is a "lookup" tensor for each day
+    num_days = len(all_dates)
+    num_features = len(feature_cols)
+    num_targets = len(target_cols)
+    
+    # This assumes data is sorted by date, row, col
+    features_reshaped = features.reshape(num_days, rows, cols, num_features)
+    targets_reshaped = targets.reshape(num_days, rows, cols, num_targets)
+    
+    # This loop slides a "time window" across our daily "images"
+    for i in range(num_days - seq_len - pred_ahead + 1):
+        # The input "movie" (X)
+        X_sequence = features_reshaped[i : i + seq_len]
+        
+        # The target "image" (y)
+        # We want to predict the *entire grid* for the future day
+        y_target = targets_reshaped[i + seq_len + pred_ahead - 1]
+        
+        X_list.append(X_sequence)
+        y_list.append(y_target)
+            
+    return np.array(X_list), np.array(y_list)
+
+print(f"Creating 5D sequences with {SEQUENCE_LENGTH} timesteps...")
+
+X_train, y_train = create_sequences_5d(train_df, feature_cols, target_cols, GRID_ROWS, GRID_COLS, SEQUENCE_LENGTH, PREDICT_AHEAD)
+X_val, y_val = create_sequences_5d(val_df, feature_cols, target_cols, GRID_ROWS, GRID_COLS, SEQUENCE_LENGTH, PREDICT_AHEAD)
+X_test, y_test = create_sequences_5d(test_df, feature_cols, target_cols, GRID_ROWS, GRID_COLS, SEQUENCE_LENGTH, PREDICT_AHEAD)
+
+print(f"Final training X shape: {X_train.shape}")
+print(f"Final training y shape: {y_train.shape}")
+print(f"Final validation X shape: {X_val.shape}")
+print(f"Final validation y shape: {y_val.shape}")
+print(f"Final test X shape: {X_test.shape}")
+print(f"Final test y shape: {y_test.shape}")
+
+# --- 7. Build and Train the ConvLSTM Model ---
+# This architecture is a good starting point.
+num_features = X_train.shape[-1]
+num_targets = y_train.shape[-1] # This will be 2 (ndci, fai)
+
+model = Sequential()
+
+# Input layer: [timesteps, rows, cols, features]
+model.add(ConvLSTM2D(
+    filters=64,
+    kernel_size=(3, 3),
+    padding='same',
+    return_sequences=True, # Must be True for all but the last ConvLSTM layer
+    input_shape=(SEQUENCE_LENGTH, GRID_ROWS, GRID_COLS, num_features)
+))
+model.add(BatchNormalization())
+model.add(Dropout(0.2))
+
+model.add(ConvLSTM2D(
+    filters=64,
+    kernel_size=(3, 3),
+    padding='same',
+    return_sequences=False # False on the LAST layer
+))
+model.add(BatchNormalization())
+model.add(Dropout(0.2))
+
+# The output of the ConvLSTM is a 2D image (rows, cols, filters)
+# We need to add a final 1x1 Convolution to shrink the filters
+# down to our number of targets (2).
+# This makes the model predict a 2-channel image (ndci, fai).
+model.add(Dense(units=num_targets)) # Predicts the 2 targets for *every pixel*
+
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.summary()
+
+print("\n--- Starting Model Training ---")
+
+# This will take significantly longer to train than the LSTM
+history = model.fit(
+    X_train, y_train,
+    epochs=20, # Start with 20
+    batch_size=16, # Use a smaller batch size for ConvLSTM
+    validation_data=(X_val, y_val)
+)
+
+print("\n--- Model Training Complete ---")
+
+# --- 8. Evaluate on Test Set ---
+print("Evaluating model on unseen 2023 test set...")
+test_loss = model.evaluate(X_test, y_test)
+print(f"Test Loss (MSE): {test_loss}")
+</code></pre>
+<br>
+<h7>Evaluating ConvLSTM:</h7>
+<pre><code class="language-python">
+    import matplotlib.pyplot as plt
+import numpy as np
+
+# --- 1. Evaluate Model on Test Set ---
+print("Evaluating model on unseen 2023 test set...")
+# This gives you the overall average loss for the entire dataset
+test_loss = model.evaluate(X_test, y_test)
+print(f"Test Loss (Scaled MSE): {test_loss}")
+
+# --- 2. Make Predictions ---
+print("\nGenerating predictions on the test set...")
+# This will return a 4D tensor: [samples, rows, cols, targets]
+y_pred_scaled = model.predict(X_test)
+
+# --- 3. Un-scale the Data for Interpretation ---
+# We must reshape the 4D data to 2D to un-scale it
+# and then reshape it back.
+
+# Get original shapes
+n_samples, n_rows, n_cols, n_targets = y_pred_scaled.shape
+
+# Reshape to 2D: [samples * rows * cols, targets]
+y_pred_2d = y_pred_scaled.reshape(-1, n_targets)
+y_test_2d = y_test.reshape(-1, n_targets)
+
+# Un-scale
+print("Un-scaling predictions...")
+y_pred_unscaled = scaler_targets.inverse_transform(y_pred_2d)
+y_test_unscaled = scaler_targets.inverse_transform(y_test_2d)
+
+# Reshape back to 4D: [samples, rows, cols, targets]
+y_pred_unscaled_4d = y_pred_unscaled.reshape(n_samples, n_rows, n_cols, n_targets)
+y_test_unscaled_4d = y_test_unscaled.reshape(n_samples, n_rows, n_cols, n_targets)
+
+print("Un-scaling complete.")
+
+# --- 4. Plot Training & Validation Loss ---
+print("\nPlotting training history...")
+plt.figure(figsize=(10, 5))
+plt.plot(history.history['loss'], label='Training Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('ConvLSTM Model Training & Validation Loss Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss (MSE)')
+plt.legend()
+plt.show()
+
+# --- 5. Plot Predicted vs. True Values (Scatter Plot) ---
+# This gives us a statistical overview.
+# We will only plot non-zero values (since 0s are just empty water)
+true_vals_ndci = y_test_unscaled_4d[..., 0].flatten()
+pred_vals_ndci = y_pred_unscaled_4d[..., 0].flatten()
+true_vals_fai = y_test_unscaled_4d[..., 1].flatten()
+pred_vals_fai = y_pred_unscaled_4d[..., 1].flatten()
+
+# Filter out the 0-padded cells for a cleaner plot
+mask = true_vals_ndci != 0
+
+print("\nPlotting NDCI: Predicted vs. True")
+plt.figure(figsize=(10, 10))
+plt.scatter(true_vals_ndci[mask], pred_vals_ndci[mask], alpha=0.1)
+plt.plot([true_vals_ndci[mask].min(), true_vals_ndci[mask].max()], 
+         [true_vals_ndci[mask].min(), true_vals_ndci[mask].max()], 
+         color='red', lw=2, label='1:1 Line (Perfect Fit)')
+plt.title('ConvLSTM: Predicted vs. True NDCI (2023 Test Set)')
+plt.xlabel('True NDCI')
+plt.ylabel('Predicted NDCI')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# --- 6. Plot Predicted vs. True MAPS (The REAL Test) ---
+# This shows us the spatial performance
+print("\nPlotting sample comparison maps...")
+
+# Let's show a few days from the test set
+# You can change these indices to see different days
+sample_days = [10, 50, 100, 150, 200]
+
+for day_index in sample_days:
+    if day_index >= len(y_test_unscaled_4d):
+        continue
+
+    # Get the "image" for NDCI (target index 0)
+    true_map_ndci = y_test_unscaled_4d[day_index, :, :, 0]
+    pred_map_ndci = y_pred_unscaled_4d[day_index, :, :, 0]
+    
+    # Get the "image" for FAI (target index 1)
+    true_map_fai = y_test_unscaled_4d[day_index, :, :, 1]
+    pred_map_fai = y_pred_unscaled_4d[day_index, :, :, 1]
+
+    # Mask out the 0-value cells to make them white
+    true_map_ndci[true_map_ndci == 0] = np.nan
+    pred_map_ndci[pred_map_ndci == 0] = np.nan
+    true_map_fai[true_map_fai == 0] = np.nan
+    pred_map_fai[pred_map_fai == 0] = np.nan
+    
+    # Find common min/max for the colorbar
+    vmin_ndci = min(np.nanmin(true_map_ndci), np.nanmin(pred_map_ndci))
+    vmax_ndci = max(np.nanmax(true_map_ndci), np.nanmax(pred_map_ndci))
+    vmin_fai = min(np.nanmin(true_map_fai), np.nanmin(pred_map_fai))
+    vmax_fai = max(np.nanmax(true_map_fai), np.nanmax(pred_map_fai))
+
+    # --- Plot NDCI ---
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    
+    im1 = axes[0].imshow(true_map_ndci, cmap='viridis', vmin=vmin_ndci, vmax=vmax_ndci)
+    axes[0].set_title(f'True NDCI - Day {day_index}')
+    axes[0].axis('off')
+    
+    im2 = axes[1].imshow(pred_map_ndci, cmap='viridis', vmin=vmin_ndci, vmax=vmax_ndci)
+    axes[1].set_title(f'Predicted NDCI - Day {day_index}')
+    axes[1].axis('off')
+    
+    fig.colorbar(im1, ax=axes, orientation='horizontal', fraction=0.046, pad=0.04)
+    plt.suptitle(f'NDCI Comparison - Test Set Day {day_index}', fontsize=16)
+    plt.show()
+
+    # --- Plot FAI ---
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    
+    im1 = axes[0].imshow(true_map_fai, cmap='viridis', vmin=vmin_fai, vmax=vmax_fai)
+    axes[0].set_title(f'True FAI - Day {day_index}')
+    axes[0].axis('off')
+    
+    im2 = axes[1].imshow(pred_map_fai, cmap='viridis', vmin=vmin_fai, vmax=vmax_fai)
+    axes[1].set_title(f'Predicted FAI - Day {day_index}')
+    axes[1].axis('off')
+    
+    fig.colorbar(im1, ax=axes, orientation='horizontal', fraction=0.046, pad=0.04)
+    plt.suptitle(f'FAI Comparison - Test Set Day {day_index}', fontsize=16)
+    plt.show()
+</code></pre>
+<br>
+
 
     </section>
   </main>
