@@ -1031,6 +1031,21 @@ plt.show()
 <!-- Place this after your code block in data.html -->
 <img src="S77andS79_xgboost_feature_importances_20ugL.png" alt="Text Output 2 from Random Forest for S77" style="max-width:75%; margin-top:1rem;">
 <br>
+<h6>Gemini analysis of performance:</h6>
+This model provides a more aggressive and sensitive approach to bloom detection.
+Model Performance:
+    Accuracy: 82.14%
+    Behavior: This is the most practically useful model for general monitoring. It acts as an "eager alarm" with a very high recall of 80%, successfully identifying 4 out of 5 actual blooms. <br>
+    The trade-off is a lower precision (50%), meaning it produces some false alarms.
+
+Key Predictive Features:
+<ol>
+    <li>fai & ndci (Satellite Data): XGBoost found that the satellite-derived indices were the most powerful predictors.</li>
+    <li>Station_S77: The model learned that being at Station S77 was a very strong predictor, treating it as a special case compared to the "default" S79.</li>
+    <li>Temperature & Discharge: These physical factors were secondary to the satellite and location data.</li>
+</ol>
+
+<b>Conclusion:</b> XGBoost provides the best-balanced performance, creating a sensitive detection system that prioritizes finding blooms by focusing on **satellite imagery and station location.**
 
   </main>
   <!-- ##################################################################################################################################################################### -->
