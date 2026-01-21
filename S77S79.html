@@ -2063,6 +2063,37 @@ Average Points: For each day, we'll average all the points that fall inside each
 <br>
 Reshape for ConvLSTM: We will then stack these "images" into a 5D tensor that the ConvLSTM needs: [samples, timesteps, rows, cols, features].
 </p>
+
+<h3 id="section10">9. ConvLSTM Model</h3>
+<h5>Recommendation of <b>XGBoost</b> for classification model</h5>
+<br>
+<p>
+<br>
+The Goal: Points-to-Pixels
+<br>
+The plan is to convert your 5,000 scattered points into a regular 2D grid for every single day in your dataset. We're essentially 
+creating a "movie" where each frame is a 2D image of the estuary, 
+and each "pixel" in that image has a value for ndci, fai, and all your discharge features.
+<br>
+This involves three main steps:
+<br>
+<i>1. Define a Grid: </i>
+<br>
+We'll find the minimum and maximum latitude/longitude of all your points to define the "box" of your study area. 
+Then, we'll decide on a resolution (e.g., 50x50 or 100x100).
+<br>
+<br>
+<i>2. Bin the Points: </i>
+<br>
+We'll create two new columns in your DataFrame, grid_row and grid_col, 
+by figuring out which grid cell each of your 5,000 points falls into.
+<br>
+<br>
+<i>3. Aggregate by Cell: </i><br>
+This is the key. We will groupby(['date', 'grid_row', 'grid_col']) and calculate the mean() of all values. 
+This combines the multiple points that might be in one grid cell into a single "pixel" value for that day. 
+</p><br>
+
     </section>
   </main>
   <!-- ##################################################################################################################################################################### -->
@@ -2082,6 +2113,7 @@ Reshape for ConvLSTM: We will then stack these "images" into a 5D tensor that th
       <li class="nav-item"><a class="nav-link" href="#section7">6. Random Forest Model</a></li>
       <li class="nav-item"><a class="nav-link" href="#section8">7. XGBoost Model</a></li>
       <li class="nav-item"><a class="nav-link" href="#section9">8. LSTM Model</a></li>
+      <li class="nav-item"><a class="nav-link" href="#section10">9. ConvLSTM Model</a></li>
     </ul>
   </aside>
 
