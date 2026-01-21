@@ -2064,6 +2064,10 @@ Average Points: For each day, we'll average all the points that fall inside each
 Reshape for ConvLSTM: We will then stack these "images" into a 5D tensor that the ConvLSTM needs: [samples, timesteps, rows, cols, features].
 </p>
 
+<br>
+<br>
+<br>
+
 <h3 id="section10">9. ConvLSTM Model</h3>
 <h5>Recommendation of <b>XGBoost</b> for classification model</h5>
 <br>
@@ -2094,7 +2098,7 @@ This is the key. We will groupby(['date', 'grid_row', 'grid_col']) and calculate
 This combines the multiple points that might be in one grid cell into a single "pixel" value for that day. 
 </p><br>
 <br>
-<h7>Creating Grid Needed for the ConvLSTM Model:</h7>
+<h6>Creating Grid Needed for the ConvLSTM Model:</h6>
 <pre><code class="language-python">
     import pandas as pd
 import numpy as np
@@ -2195,7 +2199,7 @@ print(gridded_file_path)
 print(df_gridded_final.head())
 </code></pre>
 <br>
-<h7>Training ConvLSTM:</h7>
+<h6>Training ConvLSTM:</h6>
 <pre><code class="language-python">
     import pandas as pd
 import numpy as np
@@ -2342,7 +2346,7 @@ print("\nGenerating evaluation plots...")
 # (The rest of the plotting code from the previous step goes here...)
 </code></pre>
 <br>
-<h7>Evaluating ConvLSTM:</h7>
+<h6>Evaluating ConvLSTM:</h6>
 <pre><code class="language-python">
     import matplotlib.pyplot as plt
 import numpy as np
