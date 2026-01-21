@@ -942,111 +942,6 @@ print("\nExploratory Data Analysis Complete. All plots saved to your directory."
 <img src="S79_correlation_heatmap_.png" alt="Heatmap of Parameters at S79" style="max-width:100%; margin-top:1rem;">
 <br>
 <br>
-<p><b>Time Series Plots</b><br>
-<u>Seasonality:</u> Temperature shows a clear, predictable seasonal cycle. Chlorophyll-a also appears to be seasonal, with most of the high-concentration events occurring in the cooler winter and spring months.<br>
-
-<u>Discharge Events:</u> Discharge is highly variable and driven by specific events (likely rainfall and water management). There are long periods of low flow punctuated by massive spikes in discharge.<br><br>
-
-<b>Scatter Plots & Correlation</b><br>
-These plots provide the most important insights for building a predictive model.<br>
-
-<u>Discharge is a Key Driver:</u> The scatter plot shows a very distinct pattern: high chlorophyll-a blooms (> 40 µg/L) only occur when river discharge is low (less than ~2,000 cfs). When discharge is high, blooms appear to be flushed out of the system, keeping chlorophyll-a concentrations low. The correlation of -0.24 confirms this negative relationship.<br>
-
-<u>Temperature Has a "Sweet Spot":</u> The relationship with temperature is not a simple line. The highest chlorophyll-a values tend to cluster in a moderate temperature range (approx. 20-27°C). Very hot and very cold temperatures are both associated with lower chlorophyll-a levels. The weak correlation of -0.12 confirms that a simple linear model for temperature won't work well.<br>
-
-<u>Satellite Indices: </u>The heatmap confirms our previous findings. NDCI has the best (but still weak) positive correlation with Chlorophyll-a at 0.17. FAI shows no meaningful correlation.<br><br>
-
-<b>Summary & Next Steps</b><br>
-The exploratory analysis was a success. We've moved from a weak correlation with a single index to a much clearer understanding of the system's drivers.<br>
-
-Your primary predictors for a bloom appear to be low discharge and moderate temperatures.<br>
-
-A simple linear model will likely not be very accurate because of the non-linear relationship with temperature.</p>
-<br>
-<br>
-<h5>Exploratory Analysis Including Satellite Indices</h5>
-<p>Code block recommeded by Gemini:</p>
-<pre><code class="language-python">
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# --- Step 1: Load Your Final Merged Dataset ---
-file_path = 'S77_Merged_Data_3DayWindow.csv'
-
-try:
-    df = pd.read_csv(file_path)
-    print("Merged dataset loaded successfully.")
-except FileNotFoundError:
-    print(f"FATAL ERROR: The file '{file_path}' was not found.")
-    raise
-
-# --- Step 2: Prepare Data and Define Bloom Category ---
-# Drop rows that have missing environmental data
-df_analysis = df.dropna(subset=['Temperature_C', 'Discharge_cfs']).copy()
-
-# Define the bloom threshold
-bloom_threshold = 20.0  # Chlorophyll-a >= 20 µg/L
-
-# Create the binary 'Bloom' column
-df_analysis['Bloom'] = (df_analysis['Chlorophylla_Measurement'] >= bloom_threshold).astype(int)
-# For clearer plot labels, we'll also create a text version
-df_analysis['Bloom_Label'] = df_analysis['Bloom'].map({1: 'Bloom', 0: 'Non-Bloom'})
-
-print(f"\nDefined 'Bloom' as Chlorophyll-a >= {bloom_threshold} µg/L.")
-print("Bloom vs. Non-Bloom counts:")
-print(df_analysis['Bloom_Label'].value_counts())
-
-
-# --- Step 3: Compare Predictor Distributions with Box Plots ---
-print("\nGenerating comparison box plots...")
-# Define the variables we want to plot
-predictor_vars = ['ndci', 'fai', 'Temperature_C', 'Discharge_cfs']
-
-# Create a 2x2 subplot
-fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-fig.suptitle('Comparison of Predictor Distributions for Bloom vs. Non-Bloom Conditions', fontsize=18)
-# Flatten the axes array for easy iteration
-axes = axes.flatten()
-
-for i, var in enumerate(predictor_vars):
-    sns.boxplot(x='Bloom_Label', y=var, data=df_analysis, ax=axes[i], order=['Non-Bloom', 'Bloom'])
-    axes[i].set_title(f'Distribution of {var}', fontsize=14)
-    axes[i].set_xlabel('')
-    axes[i].set_ylabel(f'{var} Value')
-
-plt.tight_layout(rect=[0, 0, 1, 0.96])
-# --- Save the figure ---
-plt.savefig('classification_eda_boxplots.png', dpi=300)
-plt.show()
-
-print("\nClassification EDA Complete. Plot saved as 'classification_eda_boxplots.png'")
-    </code></pre>
-<p>Output:<br>
-Defined 'Bloom' as Chlorophyll-a >= 20.0 µg/L.<br>
-Bloom vs. Non-Bloom counts:<br>
-Bloom_Label<br>
-Non-Bloom    68<br>
-Bloom        16<br>
-Name: count, dtype: int64</p>
-
-<br>
-
-<!-- Place this after your code block in data.html -->
-<img src="S77_Classification_EDA_Boxplots.png" alt="Boxplots of NDCI, FAI, Temp, and Discharge" style="max-width:100%; margin-top:1rem;">
-<br>
-<br>
-<p><b>Key Insights from the Box Plots</b><br>
-<u>Discharge is the Strongest Predictor:</u> There is a dramatic difference between the two categories. Blooms almost exclusively occur under <u>low discharge</u> conditions. The "Bloom" box is very small and sits at the bottom of the scale, while the "Non-Bloom" category contains all of the high-discharge events.<br>
-
-<u>Temperature is a Good Predictor:</u> Blooms favor a <u>cooler, narrower range of temperatures.</u> The median temperature for "Bloom" is visibly lower than for "Non-Bloom", and the box is much tighter.<br>
-
-<u>Satellite Indices are Weak Predictors (On Their Own):</u> While the median <u>NDCI</u> and <u>FAI</u> are slightly higher during blooms, the boxes have a massive amount of overlap. This means that while they might provide some helpful information, they are not reliable enough to separate "Bloom" from "Non-Bloom" conditions by themselves. <br><br>
-
-<b>What This Means for Your Model</b>
-Your EDA has been highly successful. The clear takeaway is that a classification model should rely heavily on <u>Discharge</u> and <u>Temperature</u> as predictive features. A model that uses all four variables will likely perform best, but it will learn that discharge is the most important factor in determining whether a bloom is likely to occur.</p>
-<br>
-<br>
 <h3 id="section7">6. Random Forest Model</h3>
 <h5>Recommendation of <b>Random Forest Classifier</b> for classification model</h5>
 <br>
@@ -1312,7 +1207,124 @@ Key Predictive Features:
     <li>Temperature & Discharge: These physical factors were secondary to the satellite and location data.</li>
 </ol>
 
-<b>Conclusion:</b> XGBoost provides the best-balanced performance, creating a sensitive detection system that prioritizes finding blooms by focusing on **satellite imagery and station location.**
+<b>Conclusion:</b> XGBoost provides the best-balanced performance, creating a sensitive detection system that prioritizes finding blooms by focusing on satellite imagery and station location.
+
+<br>
+<br>
+
+<p>Modification to 40.0 threshold:</p>
+<br>
+<pre><code class="language-python">
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+
+# --- Step 1: Load and Prepare Data ---
+file_path = 'S77_S79_Merged_Final_Corrected.csv'
+
+try:
+    df = pd.read_csv(file_path)
+except FileNotFoundError:
+    print(f"FATAL ERROR: The file '{file_path}' was not found.")
+    raise
+
+# Drop rows where key features or the target variable are missing
+df_model = df.dropna(subset=['Chlorophylla_Measurement', 'ndci', 'fai', 'Temperature_C', 'Discharge_cfs']).copy()
+
+# --- MODIFIED: Set the bloom threshold to the FDEP standard ---
+bloom_threshold = 40.0
+df_model['Bloom'] = (df_model['Chlorophylla_Measurement'] >= bloom_threshold).astype(int)
+
+# One-Hot Encode the Station_Id
+df_model = pd.get_dummies(df_model, columns=['Station_Id'], prefix='Station')
+
+print("Data prepared for modeling with a 40.0 µg/L threshold.")
+print("New bloom distribution:\n", df_model['Bloom'].value_counts())
+
+# Define our features (X) and target (y)
+features = ['ndci', 'fai', 'Temperature_C', 'Discharge_cfs', 'Station_S77', 'Station_S79']
+X = df_model[features]
+y = df_model['Bloom']
+
+print(f"\nFeatures (X): {X.columns.tolist()}")
+print(f"Target (y): 'Bloom (>= 40 µg/L)'")
+
+# --- Step 2: Split Data into Training and Testing Sets ---
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42, stratify=y
+)
+
+print(f"\nData split into {len(X_train)} training samples and {len(X_test)} testing samples.")
+
+# --- Step 3: Train the Random Forest Classifier ---
+model = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
+model.fit(X_train, y_train)
+print("\nRandom Forest model trained successfully.")
+
+# --- Step 4: Evaluate the Model on Unseen Test Data ---
+y_pred = model.predict(X_test)
+
+# --- Metrics ---
+accuracy = accuracy_score(y_test, y_pred)
+print(f"\n--- Model Evaluation (Threshold: {bloom_threshold} µg/L) ---")
+print(f"Overall Accuracy: {accuracy:.2%}")
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=['Non-Bloom', 'Bloom']))
+
+# --- Confusion Matrix ---
+print("Confusion Matrix:")
+cm = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='g', cmap='Oranges',
+            xticklabels=['Predicted Non-Bloom', 'Predicted Bloom'],
+            yticklabels=['Actual Non-Bloom', 'Actual Bloom'])
+plt.title(f'Confusion Matrix (Bloom Threshold = {bloom_threshold} µg/L)')
+plt.savefig(f'S77andS79_40Threshold_confusion_matrix_{int(bloom_threshold)}ugL.png', dpi=300)
+plt.show()
+
+# --- Step 5: Analyze Feature Importance ---
+importances = model.feature_importances_
+feature_importance_df = pd.DataFrame({
+    'Feature': features,
+    'Importance': importances
+}).sort_values(by='Importance', ascending=False)
+
+print("\n--- Feature Importance ---")
+print(feature_importance_df)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x='Importance', y='Feature', data=feature_importance_df, palette='plasma')
+plt.title(f'Feature Importances (Bloom Threshold = {bloom_threshold} µg/L)')
+plt.savefig(f'S77andS79_40Threshold_feature_importances_{int(bloom_threshold)}ugL.png', dpi=300)
+plt.show()
+    </code></pre>
+    <h5>Output of Code:</h5>
+<br>
+<!-- Place this after your code block in data.html -->
+<img src="XGBoost40_TextOutput.png" alt="Text Output 1 from XGBoost for S77 and S79" style="max-width:75%; margin-top:1rem;">
+<!-- Place this after your code block in data.html -->
+<img src="S77andS79_xgboost_confusion_matrix_40ugL.png" alt="Confusion Matrix from XGBoost for S77 and S79" style="max-width:100%; margin-top:1rem;">
+<br>
+<!-- Place this after your code block in data.html -->
+<img src="S77andS79_xgboost_feature_importances_40ugL.png" alt="Text Output 2 from XGBoost for S77 and S79" style="max-width:75%; margin-top:1rem;">
+
+<h6>Gemini analysis of performance:</h6>
+This model provides a more aggressive and sensitive approach to bloom detection.
+Model Performance:
+    Accuracy: 89.29%
+    Behavior: Like the Random Forest model, XGBoost fails to identify any blooms at this high threshold, achieving a `recall` of 0.00. Even with techniques to handle the imbalanced data, the event rarity is too extreme.
+
+Key Predictive Features:
+<ol>
+    <li>Temperature_C: The model identified **water temperature** as the overwhelmingly dominant predictive feature, contributing more than 50% of the importance.</li>
+    <li>ndci: The satellite index is the clear secondary factor.</li>
+    <li>Station Location: The model assigns **zero importance** to location, strongly implying these extreme blooms are driven by large-scale phenomena (like a heatwave) that render local differences irrelevant.</li>
+</ol>
+
+<b>Conclusion:</b> This result definitively shows that predicting >40 µg/L blooms is a data-limited problem. The model's focus on temperature provides the strongest clue about the primary driver of these rare, high-intensity events.
 
   </main>
   <!-- ##################################################################################################################################################################### -->
