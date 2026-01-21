@@ -137,12 +137,7 @@ output_path = "Extracted_Indices_S77_and_S79.csv"
 df_s77_s79.to_csv(output_path, index=False)
 
     </code></pre>
-    <br>
-    <p> 
-        Results in 216 points of data where imagery was usable imagery was captured at the S77 station.
-    <br>
-        Code below focuses on the master water quality file, DBHYDRO_WQ_AllStations_Converted.csv, to isolate S77 Chloropyll-a data.
-    </p>
+    <br> 
     <br>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
@@ -177,59 +172,68 @@ print(df.shape)
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
 # Load the CSV file
-file_path = "S77_Chlorophylla_Data.csv"
+file_path = "S77_and_S79_Chlorophylla_Data.csv"
 df = pd.read_csv(file_path)
 
 # Strip any extra whitespace in column names
 df.columns = df.columns.str.strip()
 
 # Filter for only Chlorophyll-a samples
-df_s77 = df_s77[df_s77['Sample Type New'] == 'SAMP']
+df = df[df['Sample Type New'] == 'SAMP']
 
 # Preview the result
-print(df_s77.head())
+print(df.head())
 
 # Export to a new CSV
-output_path = "S77_Chlorophylla_Data_SamplesOnly.csv"
-df_s77.to_csv(output_path, index=False)
-print(df_s77.shape)
+output_path = "S77_and_S79_Chlorophylla_Data_SamplesOnly.csv"
+df.to_csv(output_path, index=False)
+print(df.shape)
     </code></pre>
     <br>
-    <p>New sample size is 275x47, filtered out 205 samples.<br>
-    <b>Visualizing s77 Chlorophyll-a Data:</b></p>
+    <br>
+    <b>Visualizing S77 and S79 Chlorophyll-a Data:</b></p>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Load the filtered dataset
-file_path = "S77_Chlorophylla_Data_SamplesOnly.csv"
+# Step 1: Load the CSV file
+file_path = "S77_and_S79_Chlorophylla_Data_SamplesOnly.csv"  
 df = pd.read_csv(file_path)
 
-# Strip any extra whitespace in column names
+# Step 2: Clean column names and parse date
 df.columns = df.columns.str.strip()
-
-# Convert Collection_Date to datetime
 df['Collection_Date'] = pd.to_datetime(df['Collection_Date'], errors='coerce')
 
-# Drop rows with invalid or missing dates or values
-df = df.dropna(subset=['Collection_Date', 'Value'])
+# Step 3: Filter for only S77 and S79
+df_filtered = df[df['Station ID'].isin(['S77', 'S79'])]
 
-# Sort by date
-df = df.sort_values('Collection_Date')
+# Optional: Drop rows with missing values in 'Value' or date
+df_filtered = df_filtered.dropna(subset=['Collection_Date', 'Value'])
 
-# Plot
+# Step 4: Sort by date
+df_filtered = df_filtered.sort_values(by='Collection_Date')
+
+# Step 5: Plot time series for each station
 plt.figure(figsize=(12, 6))
-plt.plot(df['Collection_Date'], df['Value'], marker='o', linestyle='-')
-plt.xlabel('Collection Date')
-plt.ylabel('Chlorophyll-a Concentration')
-plt.title('Chlorophyll-a Time Series at S77')
+
+for station in ['S77', 'S79']:
+    station_data = df_filtered[df_filtered['Station ID'] == station]
+    plt.plot(station_data['Collection_Date'], station_data['Value'], label=f'{station}')
+
+# Step 6: Customize the plot
+plt.xlabel('Date')
+plt.ylabel('Chlorphyll-a Measurement (μg/L)')  # 
+plt.title('Time Series Plot for S77 and S79')
+plt.legend()
 plt.grid(True)
 plt.tight_layout()
+plt.savefig('S77_S79_Chlorophylla_TimeSeries.png', dpi=300)
 plt.show()
+
     </code></pre>
     <br>
-    <img src="S77Chlorophylla_TimeSeries.png" alt="S77 Chlorophyll-a time series" style="max-width:100%; margin-top:1rem;">
+    <img src="S77_S79_Chlorophylla_TimeSeries.png" alt="S77 and S79 Chlorophyll-a time series" style="max-width:100%; margin-top:1rem;">
     
     <br>
     <br>
@@ -246,14 +250,14 @@ import pandas as pd
 from datetime import timedelta
 
 # Step 1: Load the satellite indices CSV
-satellite_fp = "Extracted_Indices_S77.csv"  # Replace with your full path if needed
+satellite_fp = "Extracted_Indices_S77_and_S79.csv"
 sat_df = pd.read_csv(satellite_fp)
 
 # Step 2: Load the chlorophyll-a samples CSV
-chl_fp = "S77_Chlorophylla_Data_SamplesOnly.csv"  # Replace with your full path if needed
+chl_fp = "S77_and_S79_Chlorophylla_Data_SamplesOnly.csv"
 chl_df = pd.read_csv(chl_fp)
 
-# Step 3: Clean column names by stripping whitespace
+# Step 3: Clean column names
 sat_df.columns = sat_df.columns.str.strip()
 chl_df.columns = chl_df.columns.str.strip()
 
@@ -261,46 +265,45 @@ chl_df.columns = chl_df.columns.str.strip()
 sat_df['date'] = pd.to_datetime(sat_df['date'], errors='coerce')
 chl_df['Collection_Date'] = pd.to_datetime(chl_df['Collection_Date'], errors='coerce')
 
-# Step 5: Initialize a new column for matched Chlorophyll-a values
+# Step 5: Initialize new column for Chlorophyll-a values
 sat_df['Chlorophylla_Measurement'] = None
 
-# Step 6: Iterate through each satellite record and find chlorophyll values within ±5 days
+# Step 6: Match satellite rows to chlorophyll-a samples within ±2 days AND same Station_Id
 for idx, sat_row in sat_df.iterrows():
     sat_date = sat_row['date']
+    station_id = sat_row['Station_Id']
     window_start = sat_date - timedelta(days=2)
     window_end = sat_date + timedelta(days=2)
 
-    # Get a copy of the subset within the ±2 day window
+    # Match on date range AND station ID
     matches = chl_df[
         (chl_df['Collection_Date'] >= window_start) &
-        (chl_df['Collection_Date'] <= window_end)
+        (chl_df['Collection_Date'] <= window_end) &
+        (chl_df['Station ID'] == station_id)
     ].copy()
 
     if not matches.empty:
-        # Calculate absolute time difference to satellite date
+        # Find the sample closest in time
         matches['TimeDiff'] = (matches['Collection_Date'] - sat_date).abs()
-
-        # Choose the closest-in-time chlorophyll sample
-        # If multiple samples, the sample closest to the imagery collection date will be selected
         closest_sample = matches.loc[matches['TimeDiff'].idxmin()]
         sat_df.at[idx, 'Chlorophylla_Measurement'] = closest_sample['Value']
 
-
-# Step 7: Drop satellite rows that did not match any chlorophyll-a samples
+# Step 7: Drop unmatched rows
 sat_df = sat_df.dropna(subset=['Chlorophylla_Measurement'])
 
-# Step 8: Save to new CSV
-output_fp = "S77_Satellite_Chlorophylla_for_ThresholdingValues_2DayWindow.csv"
+# Step 8: Save merged file
+output_fp = "S77_S79_Satellite_Chlorophylla_for_ThresholdingValues_2DayWindow.csv"
 sat_df.to_csv(output_fp, index=False)
 
 print(f"✅ Merged dataset saved to: {output_fp}")
-print(sat_df.shape)
+print(f"📊 Final dataset shape: {sat_df.shape}")
+
     </code></pre>
 <br>
 <p><b>Accuracy results of the 2-day, 3-day, and 5-day windows:</b></p>
 <br>
 <p><i>2-day Window:</i><br>
-    FAI ~ Chlorophyll-a: y = 1.1615 * x + 38.0137<br>
+    FAI ~ Chlorophyll-a: y = -4.4776 * x + 556.2196<br>
     NDCI ~ Chlorophyll-a: y = 0.0021 * x + -0.0458<br>
     Index thresholds for 40.0 µg/L Chlorophyll-a:<br>
     FAI Threshold: 84.4721<br>
@@ -308,36 +311,38 @@ print(sat_df.shape)
 <br>
 <br>
 <p><i>3-day Window:</i><br>
-    FAI ~ Chlorophyll-a: y = 0.3801 * x + 50.1661<br>
-    NDCI ~ Chlorophyll-a: y = 0.0020 * x + -0.0261<br>
+    FAI ~ Chlorophyll-a: y = -1.3877 * x + 494.5230<br>
+    NDCI ~ Chlorophyll-a: y = 0.0012 * x + 0.0306<br>
     Index thresholds for 40.0 µg/L Chlorophyll-a:<br>
     FAI Threshold: 65.3719<br>
     NDCI Threshold: 0.0535</p>
 <br>
 <br><p><i>5-day Window:</i><br>
-    FAI ~ Chlorophyll-a: y = -0.7844 * x + 56.5624<br>
-    NDCI ~ Chlorophyll-a: y = 0.0017 * x + -0.0205<br>
+    FAI ~ Chlorophyll-a: y = -3.4817 * x + 524.0014<br>
+    NDCI ~ Chlorophyll-a: y = 0.0010 * x + 0.0366<br>
     Index thresholds for 40.0 µg/L Chlorophyll-a:<br>
-    FAI Threshold: 25.1850<br>
-    NDCI Threshold: 0.0470</p>
+    FAI Threshold: 384.7329<br>
+    NDCI Threshold: 0.0766</p>
 <br>
 <!-- Place this after your code block in data.html -->
-<img src="S77_2DayRegression_NDCI_and_FAI.png" alt="2-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
+<img src="S77_S79_2DayRegression_NDCI_and_FAI.png" alt="2-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
 <br>
 <!-- Place this after your code block in data.html -->
-<img src="S77_3DayRegression_NDCI_and_FAI.png" alt="3-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
+<img src="S77_S79_3DayRegression_NDCI_and_FAI.png" alt="3-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
 <br>
 <!-- Place this after your code block in data.html -->
-<img src="S77_5DayRegression_NDCI_and_FAI.png" alt="5-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
+<img src="S77_S79_5DayRegression_NDCI_and_FAI.png" alt="5-day Window Regression for NDCI and FAI with Chlorophyll-a" style="max-width:100%; margin-top:1rem;">
 
 
 <br></br>
 <br></br>
 
-    <h3 id="section4">3. Isolating and Analyzing S77 Discharge and Water Temperature Data</h3>
+    <h3 id="section4">3. Isolating and Analyzing S79 Discharge and Water Temperature Data</h3>
+    <br>
+    <p>Already have S77 file, just need S79 data to be isolated.</p>
     <br>
     <h5>Starting with Water Temperature Data:</h5>
-    <p>Code below loads filters the water temperature data to S77 and SAMP data.</p>
+    <p>Code below loads filters the water temperature data to S79 and SAMP data.</p>
 <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
     import pandas as pd
@@ -349,55 +354,113 @@ df = pd.read_csv(file_path)
 # Strip any extra whitespace in column names
 df.columns = df.columns.str.strip()
 
-# Filter for Station_Id == 'S77'
-df_s77 = df[df['Station ID'] == 'S77']
+# Filter for Station_Id == 'S77', 'S79'
+df_s77_s79 = df[df['Station ID'].isin(['S77', 'S79'])]
 
 # Filter for only Chlorophyll-a samples
-df_s77 = df_s77[df_s77['Sample Type New'] == 'SAMP']
+df_s77_s79 = df_s77_s79[df_s77_s79['Sample Type New'] == 'SAMP']
 
 # Preview the result
-print(df_s77.head())
-print(df_s77.shape)
+print(df_s77_s79.head())
+print(df_s77_s79.shape)
 # Export to a new CSV
-output_path = "WaterTemp_S77.csv"
-df_s77.to_csv(output_path, index=False)
+output_path = "S77andS79_WaterTemp.csv"
+df_s77_s79.to_csv(output_path, index=False)
     </code></pre>
     <br>
-    <p>Generating a time series of S77 Water Temperature:</p>
+    <p>Combining Water Temp, Discharge, and Satellite Data for S77 and S79</p>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
     <pre><code class="language-python">
     import pandas as pd
-import matplotlib.pyplot as plt
 
-# Load the filtered dataset
-file_path = "WaterTemp_S77.csv"
-df = pd.read_csv(file_path)
+# --- Step 1: Define File Paths ---
+satellite_file = 'S77_S79_Satellite_Chlorophylla_for_ThresholdingValues_3DayWindow.csv' #<-- Use your combined S77 & S79 satellite data file
+discharge_file = 'S79andS77_DailyAverageDischargeData.csv' #<-- Your new combined discharge file
+temp_file = 'S77andS79_WaterTemp.csv' #<-- Your combined temperature file (if available)
 
-# Strip any extra whitespace in column names
-df.columns = df.columns.str.strip()
+# --- Step 2: Load and Prepare Data ---
 
-# Convert Collection_Date to datetime
-df['Collection_Date'] = pd.to_datetime(df['Collection_Date'], errors='coerce')
+# Load main satellite data
+try:
+    df_sat = pd.read_csv(satellite_file)
+    df_sat['date'] = pd.to_datetime(df_sat['date'])
+    print("Satellite data for S77 & S79 loaded.")
+except FileNotFoundError:
+    print(f"Error: Could not find the satellite file '{satellite_file}'. Please update the filename.")
+    raise
 
-# Drop rows with invalid or missing dates or values
-df = df.dropna(subset=['Collection_Date', 'Value'])
+# Load and prepare the discharge data
+try:
+    df_discharge = pd.read_csv(discharge_file)
+    print("Discharge data loaded.")
 
-# Sort by date
-df = df.sort_values('Collection_Date')
+    # --- ADDED: Rename stations for consistency ---
+    station_name_map = {
+        'S77_S': 'S77',
+        'S79_TOT': 'S79'
+    }
+    df_discharge['Station'] = df_discharge['Station'].replace(station_name_map)
+    # ---
 
-# Plot
-plt.figure(figsize=(12, 6))
-plt.plot(df['Collection_Date'], df['Value'], marker='o', linestyle='-')
-plt.xlabel('Collection Date')
-plt.ylabel('Temperature (°C)')
-plt.title('Temperature Time Series at S77')
-plt.grid(True)
-plt.tight_layout()
-plt.show()
+    # Rename columns to be consistent for the merge
+    df_discharge = df_discharge[['Date', 'Station', 'Data Value']].rename(
+        columns={'Date': 'date', 'Station': 'Station_Id', 'Data Value': 'Discharge_cfs'}
+    )
+    df_discharge['date'] = pd.to_datetime(df_discharge['date'], format='%d-%b-%y')
+
+except FileNotFoundError:
+    print(f"Warning: Could not find '{discharge_file}'. Discharge data will be missing.")
+    df_discharge = None
+
+# Load and prepare temperature data
+# This part assumes you have a combined temperature file with a 'Station_Id' column
+try:
+    df_temp = pd.read_csv(temp_file)
+    df_temp = df_temp[df_temp['Test Name'] == 'Temperature']
+    df_temp['date'] = pd.to_datetime(df_temp['Collection_Date'])
+    df_temp = df_temp[['date', 'Station ID', 'Value']].rename(columns={'Value': 'Temperature_C', 'Station ID': 'Station_Id'})
+    print("Temperature data loaded.")
+except FileNotFoundError:
+    print(f"Warning: Could not find '{temp_file}'. Temperature data will be missing.")
+    df_temp = None
+
+
+# --- Step 3: Merge the DataFrames ---
+df_merged = pd.merge(df_sat, df_discharge, on=['date', 'Station_Id'], how='left')
+print("\nMerged with discharge data.")
+
+if df_temp is not None:
+    # ✅ Correct sort order: date first, then Station_Id
+    df_merged = df_merged.sort_values(['date', 'Station_Id']).reset_index(drop=True)
+    df_temp = df_temp.sort_values(['date', 'Station_Id']).reset_index(drop=True)
+
+    df_final = pd.merge_asof(
+        df_merged,
+        df_temp,
+        on='date',
+        by='Station_Id',
+        direction='nearest',
+        tolerance=pd.Timedelta('3 days')
+    )
+    print("✅ Merged with temperature data.")
+else:
+    df_final = df_merged
+
+
+
+# --- Step 4: Inspect and Save ---
+print("\n--- Final Merged DataFrame ---")
+print(df_final.head())
+print("\n--- Value Counts by Station ---")
+print(df_final['Station_Id'].value_counts())
+print("\n--- Missing Values in New Columns ---")
+print(df_final[['Discharge_cfs', 'Temperature_C']].isnull().sum())
+
+output_filename = 'S77_S79_Merged_Final_Corrected.csv'
+df_final.to_csv(output_filename, index=False)
+print(f"\nSuccessfully created the final merged file: '{output_filename}'") #<-- Use your combined S77 & S79 satellite data file
     </code></pre>
     <br>
-    <!-- Place this after your code block in data.html -->
-<img src="S77_Temperature_TimeSeries.png" alt="Temperature Time Series at S77" style="max-width:100%; margin-top:1rem;">
 <br>
 <br>
 <h5>Switching to Discharge Data:</h5>
@@ -428,45 +491,13 @@ output_path = "S77_DischargeData.csv"
 df_s77.to_csv(output_path, index=False)
     </code></pre>
     <br>
-    <p>Generating a time series of S77 Discharge:</p>
-<button class="copy-btn" onclick="copyCode(this)">Copy</button>
-    <pre><code class="language-python">
-    import pandas as pd
-import matplotlib.pyplot as plt
-
-# Load the filtered dataset
-file_path = "S77_DischargeData.csv"
-df = pd.read_csv(file_path)
-
-# Strip any extra whitespace in column names
-df.columns = df.columns.str.strip()
-
-# Convert Collection_Date to datetime
-df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-
-# Drop rows with invalid or missing dates or values
-df = df.dropna(subset=['Date', 'Data Value'])
-
-# Sort by date
-df = df.sort_values('Date')
-
-# Plot
-plt.figure(figsize=(12, 6))
-plt.plot(df['Date'], df['Data Value'], marker='o', linestyle='-')
-plt.xlabel('Date')
-plt.ylabel('Daily Discharge (cfs)')
-plt.title('Discharge Time Series at S77')
-plt.grid(True)
-plt.tight_layout()
-plt.savefig('S77_Discharge_TimeSeries.png', dpi=300)
-plt.show()
-    </code></pre>
-    <br>
+<p>Visualize discharge, temperature, and Chlorophyll-a data:</p>
     <!-- Place this after your code block in data.html -->
-<img src="S77_Discharge_TimeSeries.png" alt="Discharge Time Series at S77" style="max-width:100%; margin-top:1rem;">
+<img src="S77_S79_TimeSeries_PublishableFigure.png" alt="Discharge Time Series at S77" style="max-width:100%; margin-top:1rem;">
+<br>
+<br>
 
-
-    <h3 id="section5">4. Merging Temperature and Discharge Data to Satellite and Chlorophyll-a Data</h3>
+    <h3 id="section5">4. Merging Temperature and Discharge Data to Satellite and Chlorophyll-a Data for S77 and S79</h3>
     <h5>Merging the datasets together, utilizing the 3-day window due to highest accuracy from the window periods.</h5>
     <p>Applying a 3-day window to the temperature and discharge data as well, to better match up to the Satellite and Chlorophyll-a data:</p>
     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
@@ -474,91 +505,91 @@ plt.show()
 import pandas as pd
 
 # --- Step 1: Define File Paths ---
-# Make sure these CSV files are in the same directory as your Jupyter Notebook
-satellite_file = 'S77_Satellite_Chlorophylla_for_ThresholdingValues_3DayWindow.csv'
-temp_file = 'WaterTemp_S77.csv'
-discharge_file = 'S77_DischargeData.csv'
+satellite_file = 'S77_S79_Satellite_Chlorophylla_for_ThresholdingValues_3DayWindow.csv' #<-- Use your combined S77 & S79 satellite data file
+discharge_file = 'S79andS77_DailyAverageDischargeData.csv' #<-- Your new combined discharge file
+temp_file = 'S77andS79_WaterTemp.csv' #<-- Your combined temperature file (if available)
 
-# --- Step 2: Load and Prepare the DataFrames ---
+# --- Step 2: Load and Prepare Data ---
 
-# Load the main satellite data
+# Load main satellite data
 try:
     df_sat = pd.read_csv(satellite_file)
-    # Convert 'date' column to datetime objects for accurate merging
     df_sat['date'] = pd.to_datetime(df_sat['date'])
-    print("Satellite data loaded successfully.")
+    print("Satellite data for S77 & S79 loaded.")
 except FileNotFoundError:
-    print(f"Error: Could not find the file '{satellite_file}'")
+    print(f"Error: Could not find the satellite file '{satellite_file}'. Please update the filename.")
     raise
 
-# Load and prepare the discharge data (still using an exact match for this)
+# Load and prepare the discharge data
 try:
     df_discharge = pd.read_csv(discharge_file)
-    df_discharge['Date'] = pd.to_datetime(df_discharge['Date'], format='%d-%b-%y')
-    df_discharge = df_discharge[['Date', 'Data Value']].rename(
-        columns={'Date': 'date', 'Data Value': 'Discharge_cfs'}
-    )
-    # Perform the initial merge for discharge
-    df_merged = pd.merge(df_sat, df_discharge, on='date', how='left')
-    print("Discharge data loaded and merged.")
-except FileNotFoundError:
-    print(f"Warning: Could not find the discharge file '{discharge_file}'.")
-    df_merged = df_sat # If no file, continue with just the satellite data
-except Exception as e:
-    print(f"An error occurred while processing the discharge file: {e}")
-    df_merged = df_sat
+    print("Discharge data loaded.")
 
-# Load and prepare the temperature data
+    # --- ADDED: Rename stations for consistency ---
+    station_name_map = {
+        'S77_S': 'S77',
+        'S79_TOT': 'S79'
+    }
+    df_discharge['Station'] = df_discharge['Station'].replace(station_name_map)
+    # ---
+
+    # Rename columns to be consistent for the merge
+    df_discharge = df_discharge[['Date', 'Station', 'Data Value']].rename(
+        columns={'Date': 'date', 'Station': 'Station_Id', 'Data Value': 'Discharge_cfs'}
+    )
+    df_discharge['date'] = pd.to_datetime(df_discharge['date'], format='%d-%b-%y')
+
+except FileNotFoundError:
+    print(f"Warning: Could not find '{discharge_file}'. Discharge data will be missing.")
+    df_discharge = None
+
+# Load and prepare temperature data
+# This part assumes you have a combined temperature file with a 'Station_Id' column
 try:
     df_temp = pd.read_csv(temp_file)
     df_temp = df_temp[df_temp['Test Name'] == 'Temperature']
-    df_temp['Date'] = pd.to_datetime(df_temp['Date'])
-    df_temp = df_temp[['Date', 'Value']].rename(
-        columns={'Date': 'date', 'Value': 'Temperature_C'}
-    )
-    print("Temperature data loaded and prepared.")
+    df_temp['date'] = pd.to_datetime(df_temp['Collection_Date'])
+    df_temp = df_temp[['date', 'Station ID', 'Value']].rename(columns={'Value': 'Temperature_C', 'Station ID': 'Station_Id'})
+    print("Temperature data loaded.")
 except FileNotFoundError:
-    print(f"Warning: Could not find the temperature file '{temp_file}'.")
-    df_temp = None
-except Exception as e:
-    print(f"An error occurred while processing the temperature file: {e}")
+    print(f"Warning: Could not find '{temp_file}'. Temperature data will be missing.")
     df_temp = None
 
-# --- Step 3: Merge Temperature Data with a 3-Day Window ---
+
+# --- Step 3: Merge the DataFrames ---
+df_merged = pd.merge(df_sat, df_discharge, on=['date', 'Station_Id'], how='left')
+print("\nMerged with discharge data.")
 
 if df_temp is not None:
-    # IMPORTANT: merge_asof requires both dataframes to be sorted by the merge key ('date')
-    df_merged = df_merged.sort_values(by='date')
-    df_temp = df_temp.sort_values(by='date')
+    # ✅ Correct sort order: date first, then Station_Id
+    df_merged = df_merged.sort_values(['date', 'Station_Id']).reset_index(drop=True)
+    df_temp = df_temp.sort_values(['date', 'Station_Id']).reset_index(drop=True)
 
-    # Use merge_asof to find the nearest temperature reading within the tolerance
     df_final = pd.merge_asof(
         df_merged,
         df_temp,
         on='date',
-        direction='nearest', # Finds the closest date (before or after)
-        tolerance=pd.Timedelta('3 days') # Sets the maximum +/- window
+        by='Station_Id',
+        direction='nearest',
+        tolerance=pd.Timedelta('3 days')
     )
-    print("\nMerged with temperature data using a 3-day window.")
+    print("✅ Merged with temperature data.")
 else:
-    df_final = df_merged # If no temp data, the final df is the one with discharge
+    df_final = df_merged
 
-# --- Step 4: Inspect and Save the Final Dataset ---
 
+
+# --- Step 4: Inspect and Save ---
 print("\n--- Final Merged DataFrame ---")
 print(df_final.head())
-
-# Check how many of the new columns are empty (null)
+print("\n--- Value Counts by Station ---")
+print(df_final['Station_Id'].value_counts())
 print("\n--- Missing Values in New Columns ---")
 print(df_final[['Discharge_cfs', 'Temperature_C']].isnull().sum())
 
-# Define the output filename
-output_filename = 'S77_Merged_Data_3DayWindow.csv'
-
-# Save the final merged dataframe to a new CSV file
+output_filename = 'S77_S79_Merged_Final_Corrected.csv'
 df_final.to_csv(output_filename, index=False)
-
-print(f"\nSuccessfully created the merged file: '{output_filename}'")
+print(f"\nSuccessfully created the final merged file: '{output_filename}'") #<-- Use your combined S77 & S79 satellite data file
     </code></pre>
 
     <br>
